@@ -17,8 +17,11 @@ namespace MSP430Proxy
 		bool m_bClosePending, m_bValid;
 		DEVICE_T m_DeviceInfo;
 		std::vector<bool> m_UsedBreakpoints;
+		
+		std::map<ULONGLONG, short> m_BreakpointInstructionMap;
 
 		bool m_BreakInPending;
+		bool m_bFLASHErased;
 
 	private:
 		bool WaitForJTAGEvent();
@@ -29,6 +32,7 @@ namespace MSP430Proxy
 			: m_bClosePending(false)
 			, m_bValid(false)
 			, m_BreakInPending(false)
+			, m_bFLASHErased(false)
 		{
 		}
 

@@ -2,10 +2,15 @@
 #include "GDBTarget.h"
 #include "MSP430Util.h"
 
+#include <MSP430_EEM.h>
+
 using namespace GDBServerFoundation;
 using namespace MSP430Proxy;
 
 #define REPORT_AND_RETURN(msg, result) { ReportLastMSP430Error(msg); return result; }
+
+enum {kMSP430_NOP = 0x4303,
+	  kMSP430_BREAKPOINT = 0x0000};
 
 bool MSP430Proxy::MSP430GDBTarget::Initialize( const char *pPortName )
 {
@@ -35,7 +40,10 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize( const char *pPortName )
 MSP430Proxy::MSP430GDBTarget::~MSP430GDBTarget()
 {
 	if (m_bClosePending)
+	{
+		printf("GDB Disconnected. Releasing MSP430 interface.\n");
 		MSP430_Close(FALSE);
+	}
 }
 
 bool MSP430Proxy::MSP430GDBTarget::WaitForJTAGEvent()
@@ -71,7 +79,10 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::ExecuteRemoteComman
 			output += "\n";
 		}
 		else
+		{
 			output = "Flash memory erased. Run \"load\" to program your binary.\n";
+			m_bFLASHErased = true;
+		}
 
 		return kGDBSuccess;
 	}
@@ -175,6 +186,15 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadTargetMemory( ULONGLONG Addr
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::WriteTargetMemory( ULONGLONG Address, const void *pBuffer, size_t sizeInBytes )
 {
+	if (Address >= m_DeviceInfo.mainStart && Address <= m_DeviceInfo.mainEnd)
+	{
+		if (!m_bFLASHErased)
+		{
+			printf("Error: FLASH needs to be erased before programming.\nPlease either use gdb with XML support, or execute \"mon erase\" command in GDB.");
+			return kGDBUnknownError;
+		}
+	}
+
 	if (MSP430_Write_Memory((LONG)Address, (char *)pBuffer, sizeInBytes) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot write device memory", kGDBUnknownError);
 	return kGDBSuccess;
@@ -202,38 +222,78 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::Terminate()
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::CreateBreakpoint( BreakpointType type, ULONGLONG Address, unsigned kind, OUT INT_PTR *pCookie )
 {
-	if (type != bptHardwareBreakpoint)
+	if (type == bptHardwareBreakpoint)
+	{
+		for (size_t i = 0; i < m_UsedBreakpoints.size(); i++)
+			if (!m_UsedBreakpoints[i])
+			{
+				if (MSP430_Breakpoint(i, (LONG)Address) != STATUS_OK)
+					REPORT_AND_RETURN("Cannot set a hardware breakpoint", kGDBUnknownError);
+				m_UsedBreakpoints[i] = true;
+				*pCookie = i;
+				return kGDBSuccess;
+			}
+			return kGDBUnknownError;
+	}
+	else if (type == bptSoftwareBreakpoint)
+	{
 		return kGDBNotSupported;
 
-	for (size_t i = 0; i < m_UsedBreakpoints.size(); i++)
-		if (!m_UsedBreakpoints[i])
+		short breakpointInsn = 0;
+
+		if (MSP430_Read_Memory((LONG)Address, (char *)&breakpointInsn, 2) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot read instruction before setting breakpoint", kGDBUnknownError);
+
+		if (Address >= m_DeviceInfo.mainStart && Address <= m_DeviceInfo.mainEnd)
 		{
-			if (MSP430_Breakpoint(i, (LONG)Address) != STATUS_OK)
-				REPORT_AND_RETURN("Cannot set a hardware breakpoint", kGDBUnknownError);
-			m_UsedBreakpoints[i] = true;
-			*pCookie = i;
-			return kGDBSuccess;
+			if ((breakpointInsn != kMSP430_NOP) && (breakpointInsn != kMSP430_BREAKPOINT))
+			{
+				printf("Cannot set a breakpoint in FLASH memory.\n");
+				return kGDBUnknownError;
+			}
 		}
 
-	return kGDBUnknownError;
+		m_BreakpointInstructionMap[Address] = breakpointInsn;
+		breakpointInsn = kMSP430_BREAKPOINT;
+
+		if (MSP430_Write_Memory((LONG)Address, (char *)&breakpointInsn, 2) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot set a software breakpoint", kGDBUnknownError);
+
+		return kGDBSuccess;
+	}
+	return kGDBNotSupported;
 }
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::RemoveBreakpoint( BreakpointType type, ULONGLONG Address, INT_PTR Cookie )
 {
-	if (type != bptHardwareBreakpoint)
-		return kGDBNotSupported;
+	if (type == bptHardwareBreakpoint)
+	{
+		size_t i = (size_t)Cookie;
+		MSP430_Clear_Breakpoint(i);
+		m_UsedBreakpoints[i] = false;
 
-	size_t i = (size_t)Cookie;
-	MSP430_Clear_Breakpoint(i);
-	m_UsedBreakpoints[i] = false;
+		return kGDBSuccess;
+	}
+	else if (type == bptSoftwareBreakpoint)
+	{
+		std::map<ULONGLONG, short>::iterator it = m_BreakpointInstructionMap.find(Address);
+		if (it == m_BreakpointInstructionMap.end())
+			return kGDBUnknownError;
 
-	return kGDBSuccess;
+		short breakpointInsn = it->second;
+
+		if (MSP430_Write_Memory((LONG)Address, (char *)&breakpointInsn, 2) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot remoev a software breakpoint", kGDBUnknownError);
+		return kGDBSuccess;
+	}
+	return kGDBNotSupported;
 }
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::EraseFLASH( ULONGLONG addr, size_t length )
 {
 	if (MSP430_Erase(ERASE_MAIN, (LONG)addr, length) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot erase FLASH memory", kGDBUnknownError);
+	m_bFLASHErased = true;
 	return kGDBSuccess;
 }
 
