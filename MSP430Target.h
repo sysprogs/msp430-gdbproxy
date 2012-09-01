@@ -15,13 +15,13 @@ namespace MSP430Proxy
 
 	class MSP430GDBTarget : public ISyncGDBTarget, public IFLASHProgrammer
 	{
+	protected:
+		DEVICE_T m_DeviceInfo;
+
 	private:
 		bool m_bClosePending, m_bValid;
-		DEVICE_T m_DeviceInfo;
 		std::vector<bool> m_UsedBreakpoints;
 		
-		std::map<ULONGLONG, short> m_BreakpointInstructionMap;
-
 		bool m_BreakInPending;
 		bool m_bFLASHErased;
 

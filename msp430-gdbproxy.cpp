@@ -9,6 +9,7 @@
 #include "stdafx.h"
 #include <stdio.h>
 #include "MSP430EEMTarget.h"
+#include "GlobalSessionMonitor.h"
 
 using namespace BazisLib;
 using namespace GDBServerFoundation;
@@ -60,11 +61,20 @@ public:
 	{
 		MSP430GDBTarget *pTarget = new MSP430EEMTarget();
 //		MSP430GDBTarget *pTarget = new MSP430GDBTarget();
+
+		if (!g_SessionMonitor.RegisterSession(pTarget))
+		{
+			printf("Cannot start a new debugging session before the old session ends.\n");
+			return NULL;
+		}
+
 		if (!pTarget->Initialize(m_Port.c_str()))
 		{
+			printf("Failed to initialize MSP430 debugging engine. Aborting.\n");
 			delete pTarget;
 			return NULL;
 		}
+		printf("New GDB debugging session started.\n");
 		return new SimpleStub(pTarget);
 	}
 

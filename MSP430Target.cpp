@@ -6,6 +6,7 @@ using namespace GDBServerFoundation;
 using namespace MSP430Proxy;
 
 #define REPORT_AND_RETURN(msg, result) { ReportLastMSP430Error(msg); return result; }
+#define MAIN_SEGMENT_SIZE 512
 
 bool MSP430Proxy::MSP430GDBTarget::Initialize( const char *pPortName )
 {
@@ -32,6 +33,8 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize( const char *pPortName )
 	return true;
 }
 
+#include "GlobalSessionMonitor.h"
+
 MSP430Proxy::MSP430GDBTarget::~MSP430GDBTarget()
 {
 	if (m_bClosePending)
@@ -39,6 +42,8 @@ MSP430Proxy::MSP430GDBTarget::~MSP430GDBTarget()
 		printf("GDB Disconnected. Releasing MSP430 interface.\n");
 		MSP430_Close(FALSE);
 	}
+
+	g_SessionMonitor.UnregisterSession(this);
 }
 
 bool MSP430Proxy::MSP430GDBTarget::WaitForJTAGEvent()
@@ -88,7 +93,7 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::ExecuteRemoteComman
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::GetEmbeddedMemoryRegions( std::vector<EmbeddedMemoryRegion> &regions )
 {
 	if (m_DeviceInfo.mainStart || m_DeviceInfo.mainEnd)
-		regions.push_back(EmbeddedMemoryRegion(mtFLASH, m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd - m_DeviceInfo.mainStart + 1));
+		regions.push_back(EmbeddedMemoryRegion(mtFLASH, m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd - m_DeviceInfo.mainStart + 1, MAIN_SEGMENT_SIZE));
 	if (m_DeviceInfo.ramStart || m_DeviceInfo.ramEnd)
 		regions.push_back(EmbeddedMemoryRegion(mtRAM, m_DeviceInfo.ramStart, m_DeviceInfo.ramEnd- m_DeviceInfo.ramStart + 1));
 	if (m_DeviceInfo.ram2Start || m_DeviceInfo.ram2End)
@@ -116,7 +121,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::ResumeAndWait( int threadID )
 GDBServerFoundation::GDBStatus MSP430GDBTarget::Step( int threadID )
 {
 	if (!DoResumeTarget(SINGLE_STEP))
-		REPORT_AND_RETURN("Cannot perform single stepping", kGDBUnknownError);
+		return kGDBUnknownError;
 
 	if (!WaitForJTAGEvent())
 		return kGDBUnknownError;
@@ -132,7 +137,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::SendBreakInRequestAsync()
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadFrameRelatedRegisters( int threadID, TargetRegisterValues &registers )
 {
-	LONG rawRegs[16];
+	LONG rawRegs[16] = {0,};
 	if (MSP430_Read_Registers(rawRegs, MASKREG(PC) | MASKREG(SP)) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot read frame-related registers", kGDBUnknownError);
 
@@ -144,7 +149,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadFrameRelatedRegisters( int t
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadTargetRegisters( int threadID, TargetRegisterValues &registers )
 {
-	LONG rawRegs[16];
+	LONG rawRegs[16] = {0,};
 	if (MSP430_Read_Registers(rawRegs, ALL_REGS) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot read device registers", kGDBUnknownError);
 
@@ -156,14 +161,14 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadTargetRegisters( int threadI
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::WriteTargetRegisters( int threadID, const TargetRegisterValues &registers )
 {
-	LONG rawRegs[16];
+	LONG rawRegs[16] = {0,};
 	int mask = 0;
 
 	for (size_t i = 0; i < 16; i++)
 		if (registers[i].Valid)
 		{
 			mask |= MASKREG(i);
-			rawRegs[i] = registers[i].ToUInt32();
+			rawRegs[i] = registers[i].ToUInt32() & 0xFFFF;
 		}
 
 	if (MSP430_Write_Registers(rawRegs, mask) != STATUS_OK)
@@ -281,6 +286,7 @@ bool MSP430Proxy::MSP430GDBTarget::DoResumeTarget( RUN_MODES_t mode )
 {
 	if (MSP430_Run(mode, FALSE) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot resume device", false);
+
 	return true;
 }
 
