@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "GDBTarget.h"
+#include "MSP430Target.h"
 #include "MSP430Util.h"
 
 #include <MSP430_EEM.h>

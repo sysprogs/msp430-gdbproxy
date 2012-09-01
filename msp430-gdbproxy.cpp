@@ -8,7 +8,7 @@
 
 #include "stdafx.h"
 #include <stdio.h>
-#include "GDBTarget.h"
+#include "MSP430Target.h"
 
 using namespace BazisLib;
 using namespace GDBServerFoundation;

@@ -24,10 +24,10 @@
     <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GDBTarget.h">
+    <ClInclude Include="MSP430Util.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="MSP430Util.h">
+    <ClInclude Include="MSP430Target.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -38,10 +38,10 @@
     <ClCompile Include="msp430-gdbproxy.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GDBTarget.cpp">
+    <ClCompile Include="MSP430Util.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="MSP430Util.cpp">
+    <ClCompile Include="MSP430Target.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
