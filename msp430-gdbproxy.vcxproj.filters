@@ -30,6 +30,9 @@
     <ClInclude Include="MSP430Target.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="MSP430EEMTarget.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -42,6 +45,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="MSP430Target.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MSP430EEMTarget.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

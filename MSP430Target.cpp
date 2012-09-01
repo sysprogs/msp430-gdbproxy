@@ -2,15 +2,10 @@
 #include "MSP430Target.h"
 #include "MSP430Util.h"
 
-#include <MSP430_EEM.h>
-
 using namespace GDBServerFoundation;
 using namespace MSP430Proxy;
 
 #define REPORT_AND_RETURN(msg, result) { ReportLastMSP430Error(msg); return result; }
-
-enum {kMSP430_NOP = 0x4303,
-	  kMSP430_BREAKPOINT = 0x0000};
 
 bool MSP430Proxy::MSP430GDBTarget::Initialize( const char *pPortName )
 {
@@ -110,8 +105,8 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::GetLastStopRecord( TargetStopRec
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::ResumeAndWait( int threadID )
 {
-	if (MSP430_Run(RUN_TO_BREAKPOINT, FALSE) != STATUS_OK)
-		REPORT_AND_RETURN("Cannot resume device", kGDBUnknownError);
+	if (!DoResumeTarget(RUN_TO_BREAKPOINT))
+		return kGDBUnknownError;
 
 	if (!WaitForJTAGEvent())
 		return kGDBUnknownError;
@@ -120,7 +115,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::ResumeAndWait( int threadID )
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::Step( int threadID )
 {
-	if (MSP430_Run(SINGLE_STEP, FALSE) != STATUS_OK)
+	if (!DoResumeTarget(SINGLE_STEP))
 		REPORT_AND_RETURN("Cannot perform single stepping", kGDBUnknownError);
 
 	if (!WaitForJTAGEvent())
@@ -222,9 +217,10 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::Terminate()
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::CreateBreakpoint( BreakpointType type, ULONGLONG Address, unsigned kind, OUT INT_PTR *pCookie )
 {
-	if (type == bptHardwareBreakpoint)
+	if ((type == bptHardwareBreakpoint) || (type == bptSoftwareBreakpoint))
 	{
 		for (size_t i = 0; i < m_UsedBreakpoints.size(); i++)
+		{
 			if (!m_UsedBreakpoints[i])
 			{
 				if (MSP430_Breakpoint(i, (LONG)Address) != STATUS_OK)
@@ -233,57 +229,21 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::CreateBreakpoint( BreakpointType
 				*pCookie = i;
 				return kGDBSuccess;
 			}
-			return kGDBUnknownError;
-	}
-	else if (type == bptSoftwareBreakpoint)
-	{
-		return kGDBNotSupported;
-
-		short breakpointInsn = 0;
-
-		if (MSP430_Read_Memory((LONG)Address, (char *)&breakpointInsn, 2) != STATUS_OK)
-			REPORT_AND_RETURN("Cannot read instruction before setting breakpoint", kGDBUnknownError);
-
-		if (Address >= m_DeviceInfo.mainStart && Address <= m_DeviceInfo.mainEnd)
-		{
-			if ((breakpointInsn != kMSP430_NOP) && (breakpointInsn != kMSP430_BREAKPOINT))
-			{
-				printf("Cannot set a breakpoint in FLASH memory.\n");
-				return kGDBUnknownError;
-			}
 		}
-
-		m_BreakpointInstructionMap[Address] = breakpointInsn;
-		breakpointInsn = kMSP430_BREAKPOINT;
-
-		if (MSP430_Write_Memory((LONG)Address, (char *)&breakpointInsn, 2) != STATUS_OK)
-			REPORT_AND_RETURN("Cannot set a software breakpoint", kGDBUnknownError);
-
-		return kGDBSuccess;
+		printf("Warning! Out of hardware breakpoints. Please use the EEM mode for software breakpoint support.\n");
+		return kGDBUnknownError;
 	}
 	return kGDBNotSupported;
 }
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::RemoveBreakpoint( BreakpointType type, ULONGLONG Address, INT_PTR Cookie )
 {
-	if (type == bptHardwareBreakpoint)
+	if ((type == bptHardwareBreakpoint) || (type == bptSoftwareBreakpoint))
 	{
 		size_t i = (size_t)Cookie;
 		MSP430_Clear_Breakpoint(i);
 		m_UsedBreakpoints[i] = false;
 
-		return kGDBSuccess;
-	}
-	else if (type == bptSoftwareBreakpoint)
-	{
-		std::map<ULONGLONG, short>::iterator it = m_BreakpointInstructionMap.find(Address);
-		if (it == m_BreakpointInstructionMap.end())
-			return kGDBUnknownError;
-
-		short breakpointInsn = it->second;
-
-		if (MSP430_Write_Memory((LONG)Address, (char *)&breakpointInsn, 2) != STATUS_OK)
-			REPORT_AND_RETURN("Cannot remoev a software breakpoint", kGDBUnknownError);
 		return kGDBSuccess;
 	}
 	return kGDBNotSupported;
@@ -316,3 +276,11 @@ void MSP430Proxy::MSP430GDBTarget::ReportLastMSP430Error( const char *pHint )
 	else
 		printf("%s\n", GetLastMSP430Error());
 }
+
+bool MSP430Proxy::MSP430GDBTarget::DoResumeTarget( RUN_MODES_t mode )
+{
+	if (MSP430_Run(mode, FALSE) != STATUS_OK)
+		REPORT_AND_RETURN("Cannot resume device", false);
+	return true;
+}
+

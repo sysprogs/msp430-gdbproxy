@@ -8,7 +8,7 @@
 
 #include "stdafx.h"
 #include <stdio.h>
-#include "MSP430Target.h"
+#include "MSP430EEMTarget.h"
 
 using namespace BazisLib;
 using namespace GDBServerFoundation;
@@ -58,7 +58,8 @@ public:
 
 	virtual IGDBStub *CreateStub()
 	{
-		MSP430GDBTarget *pTarget = new MSP430GDBTarget();
+		MSP430GDBTarget *pTarget = new MSP430EEMTarget();
+//		MSP430GDBTarget *pTarget = new MSP430GDBTarget();
 		if (!pTarget->Initialize(m_Port.c_str()))
 		{
 			delete pTarget;

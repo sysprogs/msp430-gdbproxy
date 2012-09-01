@@ -7,6 +7,8 @@
 #include "registers-msp430.h"
 #include <vector>
 
+enum MSP430_MSG;
+
 namespace MSP430Proxy
 {
 	using namespace GDBServerFoundation;
@@ -23,9 +25,10 @@ namespace MSP430Proxy
 		bool m_BreakInPending;
 		bool m_bFLASHErased;
 
-	private:
-		bool WaitForJTAGEvent();
+	protected:
+		virtual bool WaitForJTAGEvent();
 		void ReportLastMSP430Error(const char *pHint);
+		virtual bool DoResumeTarget(RUN_MODES_t mode);
 
 	public:
 		MSP430GDBTarget()
@@ -38,7 +41,7 @@ namespace MSP430Proxy
 
 		~MSP430GDBTarget();
 
-		bool Initialize(const char *pPortName);
+		virtual bool Initialize(const char *pPortName);
 
 		virtual GDBStatus GetLastStopRecord(TargetStopRecord *pRec);
 		virtual GDBStatus ResumeAndWait(int threadID);
