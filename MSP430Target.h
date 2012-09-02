@@ -26,7 +26,7 @@ namespace MSP430Proxy
 		bool m_bFLASHErased;
 
 	protected:
-		bool m_BreakInPending;
+		bool m_BreakInPending, m_bFLASHCommandsUsed;
 
 	protected:
 		virtual bool WaitForJTAGEvent();
@@ -39,6 +39,7 @@ namespace MSP430Proxy
 			, m_bValid(false)
 			, m_BreakInPending(false)
 			, m_bFLASHErased(false)
+			, m_bFLASHCommandsUsed(false)
 		{
 		}
 
@@ -57,9 +58,9 @@ namespace MSP430Proxy
 		}
 
 	public:	//Register accessing API
-		virtual GDBStatus ReadFrameRelatedRegisters(int threadID, TargetRegisterValues &registers);
-		virtual GDBStatus ReadTargetRegisters(int threadID, TargetRegisterValues &registers);
-		virtual GDBStatus WriteTargetRegisters(int threadID, const TargetRegisterValues &registers);
+		virtual GDBStatus ReadFrameRelatedRegisters(int threadID, RegisterSetContainer &registers);
+		virtual GDBStatus ReadTargetRegisters(int threadID, RegisterSetContainer &registers);
+		virtual GDBStatus WriteTargetRegisters(int threadID, const RegisterSetContainer &registers);
 
 	public: //Memory accessing API
 		virtual GDBStatus ReadTargetMemory(ULONGLONG Address, void *pBuffer, size_t *pSizeInBytes);

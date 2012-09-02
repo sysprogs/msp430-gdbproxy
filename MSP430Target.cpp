@@ -27,6 +27,15 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize(const GlobalSettings &settings)
 	if (MSP430_Reset(ALL_RESETS, FALSE, FALSE) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot reset the MSP430 device", false);
 
+	if (settings.AutoErase)
+	{
+		printf("Erasing FLASH...\n");
+		if (MSP430_Erase(ERASE_MAIN, m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd - m_DeviceInfo.mainStart) != STATUS_OK)
+			printf("Warning: cannot erase FLASH: %s\n", GetLastMSP430Error());
+		else
+			m_bFLASHErased = true;
+	}
+
 	m_DeviceInfo.string[__countof(m_DeviceInfo.string) - 1] = 0;
 	printf("Found an %s device with %d hardware breakpoints.\n", m_DeviceInfo.string, m_DeviceInfo.nBreakpoints);
 
@@ -138,7 +147,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::SendBreakInRequestAsync()
 	return kGDBSuccess;
 }
 
-GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadFrameRelatedRegisters( int threadID, TargetRegisterValues &registers )
+GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadFrameRelatedRegisters( int threadID, RegisterSetContainer &registers )
 {
 	LONG rawRegs[16] = {0,};
 	if (MSP430_Read_Registers(rawRegs, MASKREG(PC) | MASKREG(SP)) != STATUS_OK)
@@ -150,7 +159,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadFrameRelatedRegisters( int t
 	return kGDBSuccess;
 }
 
-GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadTargetRegisters( int threadID, TargetRegisterValues &registers )
+GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadTargetRegisters( int threadID, RegisterSetContainer &registers )
 {
 	LONG rawRegs[16] = {0,};
 	if (MSP430_Read_Registers(rawRegs, ALL_REGS) != STATUS_OK)
@@ -162,7 +171,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadTargetRegisters( int threadI
 	return kGDBSuccess;
 }
 
-GDBServerFoundation::GDBStatus MSP430GDBTarget::WriteTargetRegisters( int threadID, const TargetRegisterValues &registers )
+GDBServerFoundation::GDBStatus MSP430GDBTarget::WriteTargetRegisters( int threadID, const RegisterSetContainer &registers )
 {
 	LONG rawRegs[16] = {0,};
 	int mask = 0;
@@ -259,6 +268,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::RemoveBreakpoint( BreakpointType
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::EraseFLASH( ULONGLONG addr, size_t length )
 {
+	m_bFLASHCommandsUsed = true;
 	if (MSP430_Erase(ERASE_MAIN, (LONG)addr, length) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot erase FLASH memory", kGDBUnknownError);
 	m_bFLASHErased = true;
@@ -267,6 +277,7 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::EraseFLASH( ULONGLO
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::WriteFLASH( ULONGLONG addr, const void *pBuffer, size_t length )
 {
+	m_bFLASHCommandsUsed = true;
 	if (MSP430_Write_Memory((LONG)addr, (char *)pBuffer, length) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot program FLASH memory", kGDBUnknownError);
 	return kGDBSuccess;
@@ -274,6 +285,7 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::WriteFLASH( ULONGLO
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::CommitFLASHWrite()
 {
+	m_bFLASHCommandsUsed = true;
 	return kGDBSuccess;
 }
 

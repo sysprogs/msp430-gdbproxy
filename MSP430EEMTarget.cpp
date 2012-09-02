@@ -10,6 +10,19 @@ MAIN_SEGMENT_SIZE
 using namespace GDBServerFoundation;
 using namespace MSP430Proxy;
 
+//Breakpoint cookie format:
+//32 bits: [type : 4] [reserved : 12] [user_data : 16]
+//For RAM breakpoints user_data contains the original insn
+//For hardware breakpoints user_data contains the handle returned by EEM API
+
+enum {kBpCookieTypeMask = 0xF0000000,
+	kBpCookieTypeHardware = 0x10000000,
+	kBpCookieTypeSoftwareFLASH = 0x20000000,
+	kBpCookieTypeSoftwareRAM = 0x30000000,
+	kBpCookieDataMask = 0x0000FFFF};
+
+#define MAKE_BP_COOKIE(type, data) (((type) & kBpCookieTypeMask) | ((data) & kBpCookieDataMask))
+
 enum MSP430_MSG
 {
 	WMX_SINGLESTEP = WM_USER + 1,
@@ -28,6 +41,8 @@ bool MSP430Proxy::MSP430EEMTarget::Initialize(const GlobalSettings &settings)
 	if (m_pBreakpointManager)
 		return false;
 
+	m_BreakpointPolicy = settings.SoftBreakPolicy;
+
 	MESSAGE_ID msgs = {0,};
 	msgs.uiMsgIdSingleStep = WMX_SINGLESTEP;
 	msgs.uiMsgIdBreakpoint = WMX_BREKAPOINT;
@@ -42,19 +57,25 @@ bool MSP430Proxy::MSP430EEMTarget::Initialize(const GlobalSettings &settings)
 
 	m_bEEMInitialized = true;
 
-	BpParameter_t bkpt;
-	memset(&bkpt, 0, sizeof(bkpt));
-	
-	bkpt.bpMode = BP_COMPLEX;
-	bkpt.lAddrVal = settings.BreakpointInstruction;
-	bkpt.bpType = BP_MDB;
-	bkpt.bpAccess = BP_FETCH;
-	bkpt.bpAction = BP_BRK;
-	bkpt.bpOperat = BP_EQUAL;
-	bkpt.bpCondition = BP_NO_COND;
-	bkpt.lMask = 0xffff;
-	if (MSP430_EEM_SetBreakpoint(&m_SoftwareBreakpointWrapperHandle, &bkpt) != STATUS_OK)
-		REPORT_AND_RETURN("Cannot create a MDB breakpoint for handling software breakpoints", false);
+	if (m_BreakpointPolicy != HardwareOnly)
+	{
+		BpParameter_t bkpt;
+		memset(&bkpt, 0, sizeof(bkpt));
+
+		bkpt.bpMode = BP_COMPLEX;
+		bkpt.lAddrVal = settings.BreakpointInstruction;
+		bkpt.bpType = BP_MDB;
+		bkpt.bpAccess = BP_FETCH;
+		bkpt.bpAction = BP_BRK;
+		bkpt.bpOperat = BP_EQUAL;
+		bkpt.bpCondition = BP_NO_COND;
+		bkpt.lMask = 0xffff;
+		if (MSP430_EEM_SetBreakpoint(&m_SoftwareBreakpointWrapperHandle, &bkpt) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot create a MDB breakpoint for handling software breakpoints", false);
+		m_HardwareBreakpointsUsed++;
+	}
+	else
+		m_SoftwareBreakpointWrapperHandle = -1;
 
 	m_pBreakpointManager = new SoftwareBreakpointManager(m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd, settings.BreakpointInstruction, settings.InstantBreakpointCleanup);
 
@@ -65,11 +86,14 @@ MSP430Proxy::MSP430EEMTarget::~MSP430EEMTarget()
 {
 	delete m_pBreakpointManager;
 
-	BpParameter_t bkpt;
-	memset(&bkpt, 0, sizeof(bkpt));
-	bkpt.bpMode = BP_CLEAR;
+	if (m_SoftwareBreakpointWrapperHandle != -1)
+	{
+		BpParameter_t bkpt;
+		memset(&bkpt, 0, sizeof(bkpt));
+		bkpt.bpMode = BP_CLEAR;
 
-	MSP430_EEM_SetBreakpoint(&m_SoftwareBreakpointWrapperHandle, &bkpt);
+		MSP430_EEM_SetBreakpoint(&m_SoftwareBreakpointWrapperHandle, &bkpt);
+	}
 
 	if (m_bEEMInitialized)
 		MSP430_EEM_Close();
@@ -152,25 +176,59 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::CreateBreakpoint( BreakpointType type, ULONGLONG Address, unsigned kind, OUT INT_PTR *pCookie )
 {
-	BpParameter_t bkpt;
-	memset(&bkpt, 0, sizeof(bkpt));
 	switch(type)
 	{
 	case bptSoftwareBreakpoint:
-		return DoCreateCodeBreakpoint(false, Address, pCookie);
+		switch(m_BreakpointPolicy)
+		{
+		case HardwareOnly:
+			return DoCreateCodeBreakpoint(true, Address, pCookie);
+		case HardwareThenSoftware:
+			return DoCreateCodeBreakpoint((m_HardwareBreakpointsUsed < m_DeviceInfo.nBreakpoints), Address, pCookie);
+		case SoftwareOnly:
+		default:
+			return DoCreateCodeBreakpoint(false, Address, pCookie);
+		}
 	case bptHardwareBreakpoint:
-		return DoCreateCodeBreakpoint(true, Address, pCookie);
+		if (m_BreakpointPolicy == HardwareThenSoftware && m_bFLASHCommandsUsed)
+			return DoCreateCodeBreakpoint((m_HardwareBreakpointsUsed < m_DeviceInfo.nBreakpoints), Address, pCookie);
+		else
+			return DoCreateCodeBreakpoint(true, Address, pCookie);
+	case bptAccessWatchpoint:
+	case bptWriteWatchpoint:
+	case bptReadWatchpoint:
+		break;
 	default:
 		return kGDBNotSupported;
 	}
 
-	//TODO: support memory breakpoints
+	BpParameter_t bkpt;
+	memset(&bkpt, 0, sizeof(bkpt));
+	bkpt.bpMode = BP_COMPLEX;
+	bkpt.lAddrVal = (ULONG)Address;
+	bkpt.bpType = BP_MAB;
+	switch(type)
+	{
+	case bptAccessWatchpoint:
+		bkpt.bpAccess = BP_NO_FETCH;
+		break;
+	case bptReadWatchpoint:
+		bkpt.bpAccess = BP_READ;
+		break;
+	case bptWriteWatchpoint:
+		bkpt.bpAccess = BP_WRITE;
+		break;
+	}
+	bkpt.bpAction = BP_BRK;
+	bkpt.bpOperat = BP_EQUAL;
+	bkpt.bpCondition = BP_NO_COND;
+	bkpt.lMask = 0xffff;
 
 	WORD bpHandle = 0;
 	if (MSP430_EEM_SetBreakpoint(&bpHandle, &bkpt) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot set an EEM breakpoint", kGDBUnknownError);
 
-	*pCookie = bpHandle;
+	*pCookie = MAKE_BP_COOKIE(kBpCookieTypeHardware, bpHandle);
 
 	return kGDBSuccess;
 }
@@ -182,6 +240,9 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::RemoveBreakpoint( B
 	case bptSoftwareBreakpoint:
 		return DoRemoveCodeBreakpoint(false, Address, Cookie);
 	case bptHardwareBreakpoint:
+	case bptReadWatchpoint:
+	case bptWriteWatchpoint:
+	case bptAccessWatchpoint:
 		return DoRemoveCodeBreakpoint(true, Address, Cookie);
 	default:
 		return kGDBNotSupported;
@@ -246,19 +307,6 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::WriteTargetMemory( 
 	return kGDBSuccess;
 }
 
-//Breakpoint cookie format:
-//32 bits: [type : 4] [reserved : 12] [user_data : 16]
-//For RAM breakpoints user_data contains the original insn
-//For hardware breakpoints user_data contains the handle returned by EEM API
-
-enum {kBpCookieTypeMask = 0xF0000000,
-	  kBpCookieTypeHardware = 0x10000000,
-	  kBpCookieTypeSoftwareFLASH = 0x20000000,
-	  kBpCookieTypeSoftwareRAM = 0x30000000,
-	  kBpCookieDataMask = 0x0000FFFF};
-
-#define MAKE_BP_COOKIE(type, data) (((type) & kBpCookieTypeMask) | ((data) & kBpCookieDataMask))
-
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoCreateCodeBreakpoint( bool hardware, ULONGLONG Address, INT_PTR *pCookie )
 {
 	if (hardware)
@@ -273,6 +321,8 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoCreateCodeBreakpo
 		WORD bpHandle = 0;
 		if (MSP430_EEM_SetBreakpoint(&bpHandle, &bkpt) != STATUS_OK)
 			REPORT_AND_RETURN("Cannot set an EEM breakpoint", kGDBUnknownError);
+
+		m_HardwareBreakpointsUsed++;
 
 		C_ASSERT(sizeof(bpHandle) == 2);
 		*pCookie = MAKE_BP_COOKIE(kBpCookieTypeHardware, bpHandle);
@@ -315,9 +365,8 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoCreateCodeBreakpo
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoRemoveCodeBreakpoint( bool hardware, ULONGLONG Address, INT_PTR Cookie )
 {
-	if (hardware)
+	if ((Cookie & kBpCookieTypeMask) == kBpCookieTypeHardware)
 	{
-		ASSERT((Cookie & kBpCookieTypeMask) == kBpCookieTypeHardware);
 		BpParameter_t bkpt;
 		memset(&bkpt, 0, sizeof(bkpt));
 		bkpt.bpMode = BP_CLEAR;
@@ -326,13 +375,11 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoRemoveCodeBreakpo
 
 		if (MSP430_EEM_SetBreakpoint(&bpHandle, &bkpt) != STATUS_OK)
 			REPORT_AND_RETURN("Cannot remove an EEM breakpoint", kGDBUnknownError);
+		m_HardwareBreakpointsUsed--;
 		return kGDBSuccess;
 	}
 	else
 	{
-		if ((Cookie & kBpCookieTypeMask) == kBpCookieTypeHardware)
-			return DoRemoveCodeBreakpoint(true, Address, Cookie);
-
 		if (!IsFLASHAddress(Address))
 		{
 			ASSERT((Cookie & kBpCookieTypeMask) == kBpCookieTypeSoftwareRAM);

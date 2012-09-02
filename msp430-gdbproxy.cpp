@@ -14,9 +14,7 @@
 using namespace BazisLib;
 using namespace GDBServerFoundation;
 
-
-
-class SimpleStub : public GDBStub
+/*class StubWithLogging : public GDBStub
 {
 	FILE *pLogFile;
 
@@ -32,35 +30,40 @@ class SimpleStub : public GDBStub
 	}
 
 public:
-	SimpleStub(ISyncGDBTarget *pTarget)
+	StubWithLogging(ISyncGDBTarget *pTarget)
 		: GDBStub(pTarget, true)
 	{
 		pLogFile = fopen("gdbserver.log", "w");
 	}
 
-	~SimpleStub()
+	~StubWithLogging()
 	{
 		fclose(pLogFile);
 	}
-};
+};*/
 
 using namespace MSP430Proxy;
+
+typedef GDBStub StubImpl;
 
 class MSP430StubFactory : public IGDBStubFactory
 {
 private:
-	std::string m_Port;
+	GlobalSettings m_Settings;
 
 public:
-	MSP430StubFactory(const char *pPort)
-		: m_Port(pPort)
+	MSP430StubFactory(const GlobalSettings &settings)
+		: m_Settings(settings)
 	{
 	}
 
-	virtual IGDBStub *CreateStub()
+	virtual IGDBStub *CreateStub(GDBServer *pServer)
 	{
-		MSP430GDBTarget *pTarget = new MSP430EEMTarget();
-//		MSP430GDBTarget *pTarget = new MSP430GDBTarget();
+		MSP430GDBTarget *pTarget;
+		if (m_Settings.EnableEEMMode)
+			pTarget = new MSP430EEMTarget();
+		else
+			pTarget = new MSP430GDBTarget();
 
 		if (!g_SessionMonitor.RegisterSession(pTarget))
 		{
@@ -68,16 +71,18 @@ public:
 			return NULL;
 		}
 
-		GlobalSettings settings;
-
-		if (!pTarget->Initialize(settings))
+		if (!pTarget->Initialize(m_Settings))
 		{
 			printf("Failed to initialize MSP430 debugging engine. Aborting.\n");
 			delete pTarget;
 			return NULL;
 		}
 		printf("New GDB debugging session started.\n");
-		return new SimpleStub(pTarget);
+
+		if (m_Settings.SingleSessionOnly)
+			pServer->StopListening();
+
+		return new StubImpl(pTarget);
 	}
 
 	virtual void OnProtocolError(const TCHAR *errorDescription)
@@ -89,22 +94,123 @@ public:
 #include <msp430.h>
 #include "MSP430Util.h"
 
-int _tmain(int argc, _TCHAR* argv[])
+void ShowHelpScreen()
 {
-	const char *pPort = "USB";
+	printf("Usage: msp430-gdbproxy [options]\n\
+All options are optional:\n\
+  --noeem - Disable EEM mode (required for advanced breakpoints)\n\
+  --keepbp - Keep software breakpoints in FLASH (reduces erase cycles)\n\
+  --bp_insn=0xNNNN - Override software breakpoint instruction (default 0x4343)\n\
+  --bpmode=<mode> - Specifies how to create breakpoints with \"break\" command:\n\
+    soft - always create software breakpoints (run \"hbreak\" to override)\n\
+    hard - always create hardware breakpoints, fail when out of them\n\
+    auto - create hardware breakpoints while available, then software\n\
+  --progport=<port> - Specify port for TI FET (default is \"USB\")\n\
+  --voltage=<nnnn> - Specify Vcc voltage in mV (default = 3333)\n\
+  --tcpport=<n> - Listen on TCP port n (default 2000)\n\
+  --keepalive - Keep running after GDB disconnects, wait for next connection\n\
+  --autoerase - Erase FLASH when debugging is started\n\
+");
+}
+
+void ParseOptions(int argc, char* argv[], GlobalSettings &settings)
+{
+	for (int i = 1; i < argc; i++)
+	{
+		std::string arg;
+		char *sep = strchr(argv[i], '=');
+		char *val = NULL;
+		if (sep)
+			arg = std::string(argv[i], sep - argv[i]), val = sep + 1;
+		else
+			arg = argv[i];
+
+		if (arg.length() < 2 || arg[0] != '-' || arg[1] != '-')
+		{
+			printf("Warning: unknown option: %s\n", arg.c_str());
+			continue;
+		}
+
+		arg = arg.substr(2);
+
+		if (arg == "noeem")
+			settings.EnableEEMMode = false;
+		else if (arg == "keepbp")
+			settings.InstantBreakpointCleanup = false;
+		else if (arg == "bp_insn")
+		{
+			if (strlen(val) < 3 || _memicmp(val, "0x", 2))
+			{
+				printf("Warning: wrong bp_insn format\n");
+				continue;
+			}
+			int insn = 0;
+			sscanf(val, "%x", &insn);
+			settings.BreakpointInstruction = insn;
+		}
+		else if (arg =="bpmode")
+		{
+			if (!val)
+				continue;
+			if (!strcmp(val, "soft"))
+				settings.SoftBreakPolicy = SoftwareOnly;
+			else if (!strcmp(val, "hard"))
+				settings.SoftBreakPolicy = HardwareOnly;
+			else if (!strcmp(val, "auto"))
+				settings.SoftBreakPolicy = HardwareThenSoftware;
+		}
+		else if (arg == "progport")
+			settings.PortName = val;
+		else if (arg == "tcpport")
+			settings.ListenPort = atoi(val);
+		else if (arg == "voltage")
+			settings.Voltage = atoi(val);
+		else if (arg == "keepalive")
+			settings.SingleSessionOnly = false;
+		else if (arg == "autoerase")
+			settings.AutoErase = true;
+	}
+}
+
+int main(int argc, char* argv[])
+{
+	GlobalSettings settings;
+
+	if (argc >= 2 && !strcmp(argv[0], "--help"))
+	{
+		ShowHelpScreen();
+		return 0;
+	}
+
+	ParseOptions(argc, argv, settings);
 
 	LONG version = 0;
-	STATUS_T status = MSP430_Initialize((char *)pPort, &version);
+	STATUS_T status = MSP430_Initialize((char *)settings.PortName, &version);
 	if (status != STATUS_OK)
 	{
-		printf("Cannot initalize MSP430.DLL on port %s: %s\n", pPort, GetLastMSP430Error());
+		printf("Cannot initalize MSP430.DLL on port %s: %s\n", settings.PortName, GetLastMSP430Error());
 		return 1;
 	}
 	MSP430_Close(FALSE);
 
-	GDBServer srv(new MSP430StubFactory(pPort));
-	srv.Start(2000);
-	Sleep(INFINITE);
+	GDBServer srv(new MSP430StubFactory(settings));
+	ActionStatus st = srv.Start(settings.ListenPort);
+	if (!st.Successful())
+	{
+		_tprintf(_T("Cannot start listening on port %d: %s\n"), settings.ListenPort, st.GetMostInformativeText().c_str());
+		return 1;
+	}
 
+	printf("msp430-gdbproxy++ v1.0 [http://gnutoolchains.com/msp430/gdbproxy]\n\
+Run \"msp430-gdbproxy --help\" to get help.\n\
+Listening on port %d.\nTo start debugging:\n\
+\t1. Start \"msp430-gdb <yourfile.elf>\"\n\
+\t2. Run the \"target remote :%d\" command in GDB.\n\
+\t3. Run \"load\" to program the FLASH memory.\n\
+\t4. In case of GDB errors, see this window for more info.\n", settings.ListenPort, settings.ListenPort);
+
+	printf("If you don't have msp430-gdb, visit http://gnutoolchains.com/msp430 to get it.\n\n");
+
+	srv.WaitForTermination();
 	return 0;
 }

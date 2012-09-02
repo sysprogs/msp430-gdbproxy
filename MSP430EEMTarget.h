@@ -3,6 +3,7 @@
 #include "MSP430Target.h"
 #include <bzscore/sync.h>
 #include <set>
+#include "settings.h"
 
 namespace MSP430Proxy
 {
@@ -19,6 +20,8 @@ namespace MSP430Proxy
 		WORD m_SoftwareBreakpointWrapperHandle;
 		SoftwareBreakpointManager *m_pBreakpointManager;
 		RUN_MODES_t m_LastResumeMode;
+
+		unsigned m_HardwareBreakpointsUsed;
 
 		//! If the last resume operation was resuming from a breakpoint, this field contains its address. If not, it contains -1
 		LONG m_BreakpointAddrOfLastResumeOp;
@@ -53,6 +56,7 @@ namespace MSP430Proxy
 
 		RAMBreakpointDatabase m_RAMBreakpoints;
 		unsigned short m_BreakpointInstruction;
+		BreakpointPolicy m_BreakpointPolicy;
 
 	protected:
 		virtual bool DoResumeTarget(RUN_MODES_t mode) override;
@@ -70,6 +74,8 @@ namespace MSP430Proxy
 			, m_LastResumeMode(RUN_TO_BREAKPOINT)
 			, m_BreakpointAddrOfLastResumeOp(-1)
 			, m_BreakpointInstruction(0)	//Will be updated in Initialize()
+			, m_HardwareBreakpointsUsed(0)
+			, m_BreakpointPolicy(HardwareThenSoftware)
 		{
 		}
 

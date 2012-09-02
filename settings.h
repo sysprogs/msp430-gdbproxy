@@ -18,6 +18,8 @@ namespace MSP430Proxy
 		const char *PortName;
 		unsigned Voltage;
 		int ListenPort;
+		bool SingleSessionOnly;
+		bool AutoErase;
 
 		GlobalSettings()
 		{
@@ -28,6 +30,8 @@ namespace MSP430Proxy
 			PortName = "USB";
 			Voltage = 3333;
 			ListenPort = 2000;
+			SingleSessionOnly = true;
+			AutoErase = false;
 		}
 	};
 }

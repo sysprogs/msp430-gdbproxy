@@ -35,6 +35,8 @@ BOOL CALLBACK MSP430Proxy::GlobalSessionMonitor::CtrlHandler( DWORD dwType )
 		MutexLocker lck(g_SessionMonitor.m_Mutex);
 		if (g_SessionMonitor.pSession)
 			g_SessionMonitor.pSession->SendBreakInRequestAsync();
+		else
+			printf("No active session. To stop listening, press Ctrl+Break.\n");
 		return TRUE;
 	}
 	return FALSE;
