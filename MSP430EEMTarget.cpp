@@ -20,9 +20,9 @@ enum MSP430_MSG
 	WMX_STOPPED,
 };
 
-bool MSP430Proxy::MSP430EEMTarget::Initialize( const char *pPortName )
+bool MSP430Proxy::MSP430EEMTarget::Initialize(const GlobalSettings &settings)
 {
-	if (!__super::Initialize(pPortName))
+	if (!__super::Initialize(settings))
 		return false;
 
 	if (m_pBreakpointManager)
@@ -46,7 +46,7 @@ bool MSP430Proxy::MSP430EEMTarget::Initialize( const char *pPortName )
 	memset(&bkpt, 0, sizeof(bkpt));
 	
 	bkpt.bpMode = BP_COMPLEX;
-	bkpt.lAddrVal = m_BreakpointInstruction;
+	bkpt.lAddrVal = settings.BreakpointInstruction;
 	bkpt.bpType = BP_MDB;
 	bkpt.bpAccess = BP_FETCH;
 	bkpt.bpAction = BP_BRK;
@@ -56,7 +56,7 @@ bool MSP430Proxy::MSP430EEMTarget::Initialize( const char *pPortName )
 	if (MSP430_EEM_SetBreakpoint(&m_SoftwareBreakpointWrapperHandle, &bkpt) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot create a MDB breakpoint for handling software breakpoints", false);
 
-	m_pBreakpointManager = new SoftwareBreakpointManager(m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd, m_BreakpointInstruction);
+	m_pBreakpointManager = new SoftwareBreakpointManager(m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd, settings.BreakpointInstruction, settings.InstantBreakpointCleanup);
 
 	return true;
 }
@@ -100,12 +100,18 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 	{
 		m_TargetStopped.Wait();
 
+		bool breakIn = m_BreakInPending;
+		m_BreakInPending = false;
+
 		LONG regPC = 0;
 
 		if (MSP430_Read_Register(&regPC, PC) != STATUS_OK)
 			REPORT_AND_RETURN("Cannot read PC register", false);
 
 		SoftwareBreakpointManager::BreakpointState bpState = m_pBreakpointManager->GetBreakpointState(regPC - 2);
+		if (m_RAMBreakpoints.IsBreakpointPresent((USHORT)regPC - 2))
+			bpState = SoftwareBreakpointManager::BreakpointActive;
+
 		switch(bpState)
 		{
 		case SoftwareBreakpointManager::BreakpointActive:
@@ -128,7 +134,7 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 			if (MSP430_Write_Register(&regPC, PC) != STATUS_OK)
 				REPORT_AND_RETURN("Cannot read PC register", false);
 
-			if (bpState == SoftwareBreakpointManager::BreakpointInactive && m_LastResumeMode != SINGLE_STEP)
+			if (bpState == SoftwareBreakpointManager::BreakpointInactive && m_LastResumeMode != SINGLE_STEP && !breakIn)
 			{
 				//Skip the breakpoint
 				if (!DoResumeTarget(m_LastResumeMode))
@@ -151,18 +157,14 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::CreateBreakpoint( B
 	switch(type)
 	{
 	case bptSoftwareBreakpoint:
-		if (!m_pBreakpointManager->SetBreakpoint((unsigned)Address))
-			return kGDBUnknownError;
-		return kGDBSuccess;
+		return DoCreateCodeBreakpoint(false, Address, pCookie);
 	case bptHardwareBreakpoint:
-		bkpt.bpMode = BP_CODE;
-		bkpt.lAddrVal = (LONG)Address;
-		bkpt.bpCondition = BP_NO_COND;
-		bkpt.bpAction = BP_BRK;
-		break;
+		return DoCreateCodeBreakpoint(true, Address, pCookie);
 	default:
 		return kGDBNotSupported;
 	}
+
+	//TODO: support memory breakpoints
 
 	WORD bpHandle = 0;
 	if (MSP430_EEM_SetBreakpoint(&bpHandle, &bkpt) != STATUS_OK)
@@ -175,21 +177,15 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::CreateBreakpoint( B
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::RemoveBreakpoint( BreakpointType type, ULONGLONG Address, INT_PTR Cookie )
 {
-	if (type == bptSoftwareBreakpoint)
+	switch(type)
 	{
-		if (!m_pBreakpointManager->RemoveBreakpoint((unsigned)Address))
-			return kGDBUnknownError;
-		return kGDBSuccess;
+	case bptSoftwareBreakpoint:
+		return DoRemoveCodeBreakpoint(false, Address, Cookie);
+	case bptHardwareBreakpoint:
+		return DoRemoveCodeBreakpoint(true, Address, Cookie);
+	default:
+		return kGDBNotSupported;
 	}
-
-	BpParameter_t bkpt;
-	memset(&bkpt, 0, sizeof(bkpt));
-	bkpt.bpMode = BP_CLEAR;
-
-	WORD bpHandle = (WORD)Cookie;
-
-	if (MSP430_EEM_SetBreakpoint(&bpHandle, &bkpt) != STATUS_OK)
-		REPORT_AND_RETURN("Cannot remove an EEM breakpoint", kGDBUnknownError);
 
 	return kGDBSuccess;
 }
@@ -222,6 +218,7 @@ bool MSP430Proxy::MSP430EEMTarget::DoResumeTarget( RUN_MODES_t mode )
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::SendBreakInRequestAsync()
 {
 	LONG state;
+	m_BreakInPending = true;
 	if (MSP430_State(&state, TRUE, NULL) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot stop device", kGDBNotSupported);
 	return kGDBSuccess;
@@ -247,4 +244,113 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::WriteTargetMemory( 
 //	m_pBreakpointManager->HideOrRestoreBreakpointsInMemorySnapshot((unsigned)Address, pBuffer, *pSizeInBytes, false);
 
 	return kGDBSuccess;
+}
+
+//Breakpoint cookie format:
+//32 bits: [type : 4] [reserved : 12] [user_data : 16]
+//For RAM breakpoints user_data contains the original insn
+//For hardware breakpoints user_data contains the handle returned by EEM API
+
+enum {kBpCookieTypeMask = 0xF0000000,
+	  kBpCookieTypeHardware = 0x10000000,
+	  kBpCookieTypeSoftwareFLASH = 0x20000000,
+	  kBpCookieTypeSoftwareRAM = 0x30000000,
+	  kBpCookieDataMask = 0x0000FFFF};
+
+#define MAKE_BP_COOKIE(type, data) (((type) & kBpCookieTypeMask) | ((data) & kBpCookieDataMask))
+
+GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoCreateCodeBreakpoint( bool hardware, ULONGLONG Address, INT_PTR *pCookie )
+{
+	if (hardware)
+	{
+		BpParameter_t bkpt;
+		memset(&bkpt, 0, sizeof(bkpt));
+		bkpt.bpMode = BP_CODE;
+		bkpt.lAddrVal = (LONG)Address;
+		bkpt.bpCondition = BP_NO_COND;
+		bkpt.bpAction = BP_BRK;
+
+		WORD bpHandle = 0;
+		if (MSP430_EEM_SetBreakpoint(&bpHandle, &bkpt) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot set an EEM breakpoint", kGDBUnknownError);
+
+		C_ASSERT(sizeof(bpHandle) == 2);
+		*pCookie = MAKE_BP_COOKIE(kBpCookieTypeHardware, bpHandle);
+
+		return kGDBSuccess;
+	}
+	else
+	{
+		if (!IsFLASHAddress(Address))
+		{
+			ULONG addr = (ULONG)(Address & ~1);
+
+			if (m_RAMBreakpoints.IsBreakpointPresent((USHORT)addr))
+			{
+				printf("Cannot set a breakpoint at 0x%04x. Breakpoint already exists.\n", (unsigned)Address);
+				return kGDBUnknownError;
+			}
+
+			unsigned short insn;
+			if (MSP430_Read_Memory(addr, (char *)&insn, 2) != STATUS_OK)
+				REPORT_AND_RETURN("Cannot set a software breakpoint in RAM", kGDBUnknownError);
+			
+			*pCookie = MAKE_BP_COOKIE(kBpCookieTypeSoftwareRAM, insn);
+
+			insn = m_BreakpointInstruction;
+			if (MSP430_Write_Memory(addr, (char *)&insn, 2) != STATUS_OK)
+				REPORT_AND_RETURN("Cannot set a software breakpoint in RAM", kGDBUnknownError);
+
+			m_RAMBreakpoints.InsertBreakpoint((USHORT)addr);
+		}
+		else
+		{
+			if (!m_pBreakpointManager->SetBreakpoint((unsigned)Address))
+				return kGDBUnknownError;
+			*pCookie = MAKE_BP_COOKIE(kBpCookieTypeSoftwareFLASH, 0);
+		}
+		return kGDBSuccess;
+	}
+}
+
+GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoRemoveCodeBreakpoint( bool hardware, ULONGLONG Address, INT_PTR Cookie )
+{
+	if (hardware)
+	{
+		ASSERT((Cookie & kBpCookieTypeMask) == kBpCookieTypeHardware);
+		BpParameter_t bkpt;
+		memset(&bkpt, 0, sizeof(bkpt));
+		bkpt.bpMode = BP_CLEAR;
+
+		WORD bpHandle = (WORD)(Cookie & kBpCookieDataMask);
+
+		if (MSP430_EEM_SetBreakpoint(&bpHandle, &bkpt) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot remove an EEM breakpoint", kGDBUnknownError);
+		return kGDBSuccess;
+	}
+	else
+	{
+		if ((Cookie & kBpCookieTypeMask) == kBpCookieTypeHardware)
+			return DoRemoveCodeBreakpoint(true, Address, Cookie);
+
+		if (!IsFLASHAddress(Address))
+		{
+			ASSERT((Cookie & kBpCookieTypeMask) == kBpCookieTypeSoftwareRAM);
+			unsigned short originalINSN = (unsigned short)(Cookie & kBpCookieDataMask);
+
+			if (MSP430_Write_Memory(Address & ~1, (char *)&originalINSN, 2) != STATUS_OK)
+				REPORT_AND_RETURN("Cannot remove a software breakpoint from RAM", kGDBUnknownError);
+
+			m_RAMBreakpoints.RemoveBreakpoint((USHORT)(Address & ~1));
+		}
+		else
+		{
+			ASSERT((Cookie & kBpCookieTypeMask) == kBpCookieTypeSoftwareFLASH);
+			if (!m_pBreakpointManager->RemoveBreakpoint((unsigned)Address))
+				return kGDBUnknownError;
+		}
+
+		return kGDBSuccess;
+	}
+
 }

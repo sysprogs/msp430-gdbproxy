@@ -68,7 +68,9 @@ public:
 			return NULL;
 		}
 
-		if (!pTarget->Initialize(m_Port.c_str()))
+		GlobalSettings settings;
+
+		if (!pTarget->Initialize(settings))
 		{
 			printf("Failed to initialize MSP430 debugging engine. Aborting.\n");
 			delete pTarget;

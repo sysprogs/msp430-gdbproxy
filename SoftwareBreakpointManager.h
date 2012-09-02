@@ -24,13 +24,13 @@ namespace MSP430Proxy
 			unsigned BpState[MAIN_SEGMENT_SIZE / 2];
 			unsigned short OriginalInstructions[MAIN_SEGMENT_SIZE /2];
 			
-			int PendingBreakpointCount;
+			int PendingBreakpointCount, InactiveBreakpointCount;
 
 			SegmentRecord()
 			{
 				memset(BpState, 0, sizeof(BpState));
 				memset(OriginalInstructions, 0, sizeof(OriginalInstructions));
-				PendingBreakpointCount = 0;
+				PendingBreakpointCount = InactiveBreakpointCount = 0;
 			}
 
 			bool SetBreakpoint(unsigned offset);
@@ -39,6 +39,8 @@ namespace MSP430Proxy
 
 		std::vector<SegmentRecord> m_Segments;
 		unsigned short m_BreakInstruction;
+
+		bool m_bInstantCleanup;
 
 		struct TranslatedAddr
 		{
@@ -61,7 +63,7 @@ namespace MSP430Proxy
 		void HideOrRestoreBreakpointsInMemorySnapshot(unsigned addr, void *pBlock, size_t length, bool hideBreakpoints);
 
 	public:
-		SoftwareBreakpointManager(unsigned flashStart, unsigned flashEnd, unsigned short breakInstruction);
+		SoftwareBreakpointManager(unsigned flashStart, unsigned flashEnd, unsigned short breakInstruction, bool instantCleanup);
 	};
 }
 

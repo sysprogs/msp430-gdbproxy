@@ -8,17 +8,17 @@ using namespace MSP430Proxy;
 #define REPORT_AND_RETURN(msg, result) { ReportLastMSP430Error(msg); return result; }
 #define MAIN_SEGMENT_SIZE 512
 
-bool MSP430Proxy::MSP430GDBTarget::Initialize( const char *pPortName )
+bool MSP430Proxy::MSP430GDBTarget::Initialize(const GlobalSettings &settings)
 {
 	if (m_bClosePending)
 		return m_bValid;
 
 	LONG version = 0;
-	if (MSP430_Initialize((char *)pPortName, &version) != STATUS_OK)
+	if (MSP430_Initialize((char *)settings.PortName, &version) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot initialize MSP430.DLL", false);
 	m_bClosePending = true;
 
-	if (MSP430_VCC(3333) != STATUS_OK)
+	if (MSP430_VCC(settings.Voltage) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot enable Vcc", false);
 
 	if (MSP430_Identify((char *)&m_DeviceInfo, sizeof(m_DeviceInfo), DEVICE_UNKNOWN) != STATUS_OK)
@@ -26,6 +26,9 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize( const char *pPortName )
 
 	if (MSP430_Reset(ALL_RESETS, FALSE, FALSE) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot reset the MSP430 device", false);
+
+	m_DeviceInfo.string[__countof(m_DeviceInfo.string) - 1] = 0;
+	printf("Found an %s device with %d hardware breakpoints.\n", m_DeviceInfo.string, m_DeviceInfo.nBreakpoints);
 
 	m_UsedBreakpoints.resize(m_DeviceInfo.nBreakpoints);
 
@@ -168,7 +171,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::WriteTargetRegisters( int thread
 		if (registers[i].Valid)
 		{
 			mask |= MASKREG(i);
-			rawRegs[i] = registers[i].ToUInt32() & 0xFFFF;
+			rawRegs[i] = registers[i].ToUInt16();
 		}
 
 	if (MSP430_Write_Registers(rawRegs, mask) != STATUS_OK)

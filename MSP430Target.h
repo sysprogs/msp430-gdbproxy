@@ -6,6 +6,7 @@
 
 #include "registers-msp430.h"
 #include <vector>
+#include "settings.h"
 
 enum MSP430_MSG;
 
@@ -22,8 +23,10 @@ namespace MSP430Proxy
 		bool m_bClosePending, m_bValid;
 		std::vector<bool> m_UsedBreakpoints;
 		
-		bool m_BreakInPending;
 		bool m_bFLASHErased;
+
+	protected:
+		bool m_BreakInPending;
 
 	protected:
 		virtual bool WaitForJTAGEvent();
@@ -41,7 +44,7 @@ namespace MSP430Proxy
 
 		~MSP430GDBTarget();
 
-		virtual bool Initialize(const char *pPortName);
+		virtual bool Initialize(const GlobalSettings &settings);
 
 		virtual GDBStatus GetLastStopRecord(TargetStopRecord *pRec);
 		virtual GDBStatus ResumeAndWait(int threadID);

@@ -5,11 +5,12 @@
 
 using namespace MSP430Proxy;
 
-MSP430Proxy::SoftwareBreakpointManager::SoftwareBreakpointManager( unsigned flashStart, unsigned flashEnd, unsigned short breakInstruction )
+MSP430Proxy::SoftwareBreakpointManager::SoftwareBreakpointManager( unsigned flashStart, unsigned flashEnd, unsigned short breakInstruction, bool instantCleanup )
 	: m_FlashStart(flashStart)
 	, m_FlashEnd(flashEnd)
 	, m_FlashSize(flashEnd - flashStart + 1)
 	, m_BreakInstruction(breakInstruction)
+	, m_bInstantCleanup(instantCleanup)
 {
 	ASSERT(!(m_FlashSize & 1));
 	size_t segmentCount = (m_FlashSize + MAIN_SEGMENT_SIZE - 1) / MAIN_SEGMENT_SIZE;
@@ -63,11 +64,12 @@ bool MSP430Proxy::SoftwareBreakpointManager::SegmentRecord::SetBreakpoint( unsig
 	case BreakpointPending:
 		return false;	//Breakpoint is already set
 	case BreakpointInactive:
+		InactiveBreakpointCount--;
 		BpState[offset / 2] = BreakpointActive;
 		return true;
 	case NoBreakpoint:
-		BpState[offset / 2] = BreakpointPending;
 		PendingBreakpointCount++;
+		BpState[offset / 2] = BreakpointPending;
 		return true;
 	default:
 		return false;
@@ -79,6 +81,7 @@ bool MSP430Proxy::SoftwareBreakpointManager::SegmentRecord::RemoveBreakpoint( un
 	switch(BpState[offset / 2])
 	{
 	case BreakpointActive:
+		InactiveBreakpointCount++;
 		BpState[offset / 2] = BreakpointInactive;
 		return true;
 	case BreakpointPending:
@@ -98,7 +101,10 @@ bool MSP430Proxy::SoftwareBreakpointManager::CommitBreakpoints()
 	for (size_t i = 0; i < m_Segments.size(); i++)
 	{
 		if (!m_Segments[i].PendingBreakpointCount)
-			continue;
+		{
+			if (!m_bInstantCleanup || !m_Segments[i].InactiveBreakpointCount)
+				continue;
+		}
 
 		unsigned segBase = m_FlashStart + i * MAIN_SEGMENT_SIZE;
 		unsigned short data[MAIN_SEGMENT_SIZE / 2], data2[MAIN_SEGMENT_SIZE / 2];
@@ -114,6 +120,7 @@ bool MSP430Proxy::SoftwareBreakpointManager::CommitBreakpoints()
 			case BreakpointInactive:
 				m_Segments[i].BpState[j] = NoBreakpoint;
 				data[j] = m_Segments[i].OriginalInstructions[j];
+				eraseNeeded = true;
 				break;
 			case BreakpointPending:
 				m_Segments[i].BpState[j] = BreakpointActive;
@@ -155,6 +162,7 @@ bool MSP430Proxy::SoftwareBreakpointManager::CommitBreakpoints()
 		}
 
 		m_Segments[i].PendingBreakpointCount = 0;
+		m_Segments[i].InactiveBreakpointCount = 0;
 	}
 
 	return true;
