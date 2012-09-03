@@ -9,6 +9,7 @@ namespace MSP430Proxy
 {
 	class SoftwareBreakpointManager;
 
+	//! Implements EEM-related debugging functionality (data breakpoints and software breakpoints).
 	class MSP430EEMTarget : public MSP430GDBTarget
 	{
 	private:

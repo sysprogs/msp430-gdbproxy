@@ -14,6 +14,10 @@ namespace MSP430Proxy
 {
 	using namespace GDBServerFoundation;
 
+	//! Implements debugging functionality without the EEM API (not supporting data breakpoints and software breakpoints).
+	/*!
+		\remarks After creating an instance of this class please call the Initialize() method.
+	*/
 	class MSP430GDBTarget : public ISyncGDBTarget, public IFLASHProgrammer
 	{
 	protected:
@@ -45,6 +49,7 @@ namespace MSP430Proxy
 
 		~MSP430GDBTarget();
 
+		//! Starts debugging session
 		virtual bool Initialize(const GlobalSettings &settings);
 
 		virtual GDBStatus GetLastStopRecord(TargetStopRecord *pRec);

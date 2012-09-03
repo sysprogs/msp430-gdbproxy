@@ -37,7 +37,13 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize(const GlobalSettings &settings)
 	}
 
 	m_DeviceInfo.string[__countof(m_DeviceInfo.string) - 1] = 0;
-	printf("Found an %s device with %d hardware breakpoints.\n", m_DeviceInfo.string, m_DeviceInfo.nBreakpoints);
+	printf("Found a device: %s\n", m_DeviceInfo.string);
+	printf("Number of hardware breakpoints: %d\n", m_DeviceInfo.nBreakpoints);
+	printf("%d bytes of FLASH memory (0x%04x-0x%04x)\n", m_DeviceInfo.mainEnd - m_DeviceInfo.mainStart + 1, m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd);
+	printf("%d bytes of RAM (0x%04x-0x%04x)\n", m_DeviceInfo.ramEnd - m_DeviceInfo.ramStart + 1, m_DeviceInfo.ramStart, m_DeviceInfo.ramEnd);
+	if (m_DeviceInfo.ram2End || m_DeviceInfo.ram2Start)
+		printf("%d bytes of RAM2 (0x%04x-0x%04x)\n", m_DeviceInfo.ram2End - m_DeviceInfo.ram2Start + 1, m_DeviceInfo.ram2Start, m_DeviceInfo.ram2End);
+	printf("%d bytes of INFO memory (0x%04x-0x%04x)\n", m_DeviceInfo.infoEnd - m_DeviceInfo.infoStart + 1, m_DeviceInfo.infoStart, m_DeviceInfo.infoEnd);
 
 	m_UsedBreakpoints.resize(m_DeviceInfo.nBreakpoints);
 
