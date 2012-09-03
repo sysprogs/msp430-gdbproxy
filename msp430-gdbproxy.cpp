@@ -176,7 +176,7 @@ int main(int argc, char* argv[])
 {
 	GlobalSettings settings;
 
-	if (argc >= 2 && !strcmp(argv[0], "--help"))
+	if (argc >= 2 && !strcmp(argv[1], "--help"))
 	{
 		ShowHelpScreen();
 		return 0;
@@ -189,6 +189,7 @@ int main(int argc, char* argv[])
 	if (status != STATUS_OK)
 	{
 		printf("Cannot initalize MSP430.DLL on port %s: %s\n", settings.PortName, GetLastMSP430Error());
+		printf("\nRun msp430-gdbproxy --help for usage instructions.\n");
 		return 1;
 	}
 	MSP430_Close(FALSE);
