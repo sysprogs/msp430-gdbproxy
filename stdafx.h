@@ -14,7 +14,7 @@
 	
 	\section Introduction
 	This project allows debugging MSP430 firmware with GDB using the original drivers and DLL from TI.
-	The project is baesd on the <a href="http://sysprogs.com/GDBServerFoundation">GDBServerFoundation</a> framework.
+	The project is based on the <a href="http://sysprogs.com/GDBServerFoundation">GDBServerFoundation</a> framework.
 
 	The main functionality of this project is implemented in the following items:
 	1. The GDBServerFoundation::MSP430::RegisterList list defines the MSP430 registers in the order expected by GDB.
