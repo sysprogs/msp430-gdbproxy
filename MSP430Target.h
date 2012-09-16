@@ -89,5 +89,6 @@ namespace MSP430Proxy
 		virtual GDBStatus EraseFLASH(ULONGLONG addr, size_t length);
 		virtual GDBStatus WriteFLASH(ULONGLONG addr, const void *pBuffer, size_t length);
 		virtual GDBStatus CommitFLASHWrite();
+		virtual void CloseSessionSafely() {}
 	};
 }

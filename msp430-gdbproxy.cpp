@@ -77,7 +77,7 @@ public:
 			delete pTarget;
 			return NULL;
 		}
-		printf("New GDB debugging session started.\n");
+		printf("Incoming connection from GDB. Starting session.\n");
 
 		if (m_Settings.SingleSessionOnly)
 			pServer->StopListening();
@@ -110,6 +110,7 @@ All options are optional:\n\
   --tcpport=<n> - Listen on TCP port n (default 2000)\n\
   --keepalive - Keep running after GDB disconnects, wait for next connection\n\
   --autoerase - Erase FLASH when debugging is started\n\
+  --nohint - Do not show the 'how to start debugging' message\n\
 ");
 }
 
@@ -169,12 +170,15 @@ void ParseOptions(int argc, char* argv[], GlobalSettings &settings)
 			settings.SingleSessionOnly = false;
 		else if (arg == "autoerase")
 			settings.AutoErase = true;
+		else if (arg == "nohint")
+			settings.NoHint = true;
 	}
 }
 
 int main(int argc, char* argv[])
 {
 	GlobalSettings settings;
+	setbuf(stdout, NULL); 
 
 	if (argc >= 2 && !strcmp(argv[1], "--help"))
 	{
@@ -188,7 +192,7 @@ int main(int argc, char* argv[])
 	STATUS_T status = MSP430_Initialize((char *)settings.PortName, &version);
 	if (status != STATUS_OK)
 	{
-		printf("Cannot initalize MSP430.DLL on port %s: %s\n", settings.PortName, GetLastMSP430Error());
+		printf("Cannot initalize MSP430.DLL on port %s:\n\t%s\n", settings.PortName, GetLastMSP430Error());
 		printf("\nRun msp430-gdbproxy --help for usage instructions.\n");
 		return 1;
 	}
@@ -202,15 +206,18 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	printf("msp430-gdbproxy++ v1.0 [http://gnutoolchains.com/msp430/gdbproxy]\n\
-Run \"msp430-gdbproxy --help\" to get help.\n\
-Listening on port %d.\nTo start debugging:\n\
+	printf("msp430-gdbproxy++ v1.01 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
+	if (!settings.NoHint)
+	{
+		printf("\nRun \"msp430-gdbproxy --help\" to learn about command line options.\n\
+To start debugging:\n\
 \t1. Start \"msp430-gdb <yourfile.elf>\"\n\
 \t2. Run the \"target remote :%d\" command in GDB.\n\
 \t3. Run \"load\" to program the FLASH memory.\n\
-\t4. In case of GDB errors, see this window for more info.\n", settings.ListenPort, settings.ListenPort);
+\t4. In case of GDB errors, see this window for more info.\n", settings.ListenPort);
 
-	printf("If you don't have msp430-gdb, visit http://gnutoolchains.com/msp430 to get it.\n\n");
+		printf("If you don't have msp430-gdb, visit http://gnutoolchains.com/msp430 to get it.\n\n");
+	}
 
 	srv.WaitForTermination();
 	return 0;

@@ -20,6 +20,7 @@ namespace MSP430Proxy
 		int ListenPort;
 		bool SingleSessionOnly;
 		bool AutoErase;
+		bool NoHint;
 
 		GlobalSettings()
 		{
@@ -32,6 +33,7 @@ namespace MSP430Proxy
 			ListenPort = 2000;
 			SingleSessionOnly = true;
 			AutoErase = false;
+			NoHint = false;
 		}
 	};
 }
