@@ -71,13 +71,14 @@ public:
 			return NULL;
 		}
 
+		printf("\nIncoming connection from GDB. Starting session...\n");
+
 		if (!pTarget->Initialize(m_Settings))
 		{
 			printf("Failed to initialize MSP430 debugging engine. Aborting.\n");
 			delete pTarget;
 			return NULL;
 		}
-		printf("Incoming connection from GDB. Starting session.\n");
 
 		if (m_Settings.SingleSessionOnly)
 			pServer->StopListening();
