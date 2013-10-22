@@ -3,7 +3,7 @@
  *
  * API for accessing EEM functionality of MSP430 library.
  *
- * Copyright (C) 2004 - 2011 Texas Instruments Incorporated - http://www.ti.com/ 
+ * Copyright (C) 2004 - 2013 Texas Instruments Incorporated - http://www.ti.com/ 
  * 
  * 
  *  Redistribution and use in source and binary forms, with or without 
@@ -194,7 +194,9 @@ typedef enum BpMode {
    /// Set range breakpoint
    BP_RANGE = 2,
    /// Set complex breakpoint
-   BP_COMPLEX = 3
+   BP_COMPLEX = 3,
+   /// Set software breakpoint
+   BP_SOFTWARE = 4
 } BpMode_t;
 
 
@@ -496,7 +498,7 @@ typedef struct VARIABLE_WATCH {
    /// Set/clear variable
    VwControl_t	vwControl;
    /// Address of the watched variable (ignored for VW_CLEAR)
-   WORD     wAddr;
+   ULONG     lAddr;
    /// Data type of the variable (ignored for VW_CLEAR)
    VwDataType_t	vwDataType;
 }
@@ -507,6 +509,7 @@ typedef struct VARIABLE_WATCH {
 */
 VwParameter_t;
 
+
 /**
  \brief  Variable watch resource structure:
          The data structure contains the resources of one variable trigger.
@@ -515,7 +518,7 @@ typedef struct VAR_WATCH_RESOURCES {
    /// Handle of the variable trigger
    WORD		vwHandle;
    /// Address of the watched variable
-   WORD     wAddr;
+   ULONG     lAddr;
    /// Data type of the variable
    VwDataType_t	vwDataType;
 }
@@ -525,8 +528,6 @@ typedef struct VAR_WATCH_RESOURCES {
          as a destination buffer for the variable watch settings.
 */
 VwResources_t;
-
-
 
 
 /// Clock control: Extended emulation
@@ -643,8 +644,8 @@ typedef struct SEQUENCER {
    SeqControl_t	seqControl;
    /// Select breakpoint as a reset trigger to set start state 0 (0 = off)
    WORD		wHandleRstTrig;
-   /// Select breakpoint as a action trigger to set the sequencer action
-   WORD		wHandleActTrig;
+   /// Select action on entering final state
+   BpAction_t	bpAction;
    //  State X:
    /// Select next state x that followed of state X
    SeqState_t   seqNextStateX[MAX_SEQ_STATE];
@@ -658,10 +659,11 @@ typedef struct SEQUENCER {
 /**
 \brief   The type SeqParameter_t is used by the functions:
          - MSP430_EEM_SetSequencer(SeqParameter_t* pSeqBuffer) as a source buffer
-         - MSP430_EEM_GetSequencer(SeqParameter_t* pSeqDestBuffer) as a destination buffer 
-         for the clock control settings.
+         - MSP430_EEM_GetSequencer(SeqParameter_t* pSeqDestBuffer) as a destination buffer
 */
 SeqParameter_t;
+
+
 
 //==============================================================================
 //==============================================================================
@@ -769,7 +771,7 @@ DLL430_SYMBOL STATUS_T WINAPI MSP430_EEM_Init(MSP430_EVENTNOTIFY_FUNC callback, 
 
 \param   pwBpHandle:   Pointer to the assigned breakpoint handle (return parameter).
                        The assigned handle is an arbitrary selected name of the breakpoint.
-					   To set a combination the value pointed to (breakpoint handle) must be zero.
+					   To set a breakpoint the value pointed to (breakpoint handle) must be zero.
 					   In case of clearing or modifying a breakpoint the handle of the breakpoint has
                        to be provided here. If a cleared or modified breakpoint is combined with another
 					   breakpoint the combination will be updated or removed.
@@ -979,14 +981,13 @@ DLL430_SYMBOL STATUS_T WINAPI MSP430_EEM_ReadTraceData(TraceBuffer_t* pTraceBuff
 /**
 \fn    STATUS_T WINAPI MSP430_EEM_RefreshTraceBuffer(void);
 
-\brief   This function refreshes the content of the Trace Buffer of the EEM.
-         No change or other action on the trace is performed.
+\brief   This function will reset the trace and clear the content of the Trace Buffer of the EEM.
 
 \note    MSP430_EEM_Init() must have been called prior to this function
 \note    The trace function must have been enabled prior to this function
 
-\return  STATUS_OK:     The trace buffer was refreshed.
-\return  STATUS_ERROR:  The trace buffer was not refreshed.
+\return  STATUS_OK:     The trace was reset.
+\return  STATUS_ERROR:  The trace was not reset.
 */
 DLL430_SYMBOL STATUS_T WINAPI MSP430_EEM_RefreshTraceBuffer(void);
 

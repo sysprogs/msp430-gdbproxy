@@ -63,14 +63,9 @@
  \par         Supported API calls:
               - MSP430_Registers()
               - MSP430_Register()
-              - MSP430_Breakpoint()
               - MSP430_Run()
               - MSP430_State()
-              - MSP430_EEM_Open()
-              - MSP430_EEM_Read_Register()
-              - MSP430_EEM_Read_Register_Test()
-              - MSP430_EEM_Write_Register()
-              - MSP430_EEM_Close()
+			  - MSP430_CcGetClockNames()
               - MSP430_CcGetModuleNames()
 */
 
@@ -182,7 +177,8 @@ typedef enum EMEX_MODE {
 typedef enum DEVICE_CLOCK_CONTROL {
 	GCC_NONE = 0, /**< Device has no clock control. The system clock continue to function when the device is stopped by JTAG */
 	GCC_STANDARD = 1, /**< Device has General Clock Control register */
-	GCC_EXTENDED = 2 /**< Device has Extended General Clock Control register and Module Clock Control register 0. */
+	GCC_EXTENDED = 2, /**< Device has Extended General Clock Control register and Module Clock Control register 0. */
+	GCC_STANDARD_I = 3 /**< Device has General Clock Control register (Note 1793)*/
 } DEVICE_CLOCK_CONTROL_t;
 
 #if ! defined(uController)
@@ -401,37 +397,6 @@ DLL430_SYMBOL STATUS_T WINAPI MSP430_Register(LONG* reg, LONG regNb, LONG rw);
 #define MSP430_Read_Register(REG, REGNB) MSP430_Register(REG, REGNB, READ)
 #define MSP430_Write_Register(REG, REGNB) MSP430_Register(REG, REGNB, WRITE)
 
-/**
-\fn    STATUS_T MSP430_Breakpoint(LONG number, LONG address);
-
-\brief   An Instruction Fetch breakpoint is set on address "address". Breakpoint block number "number" is used.
-
-\note    1. DO NOT call this function when using the Enhanced Emulation Module (EEM) API provided by MSP430_EEM.h!\n
-            This function is made available just due to downward compatibility.
-\note    2. MSP430_OpenDevice() must have been called prior to calling this function.
-\note    3. Setting a breakpoint in an invalid breakpoint block will return STATUS_ERROR. This mechanism can be
-            employed to determine how many breakpoint blocks a device supports. Or reference device.nBreakpoints.
-\note    4. A breakpoint block can be disabled by setting its breakpoint address to zero (0x0).
-\note    5. It is the responsibility of the application to maintain what breakpoints (if any) are set in what
-            breakpoint blocks (as it's not possible to read the breakpoint address of a breakpoint block).
-\note    6. A breakpoint set on odd address N will be set on even address N-1.
-\note    7. A breakpoint is enabled only prior to RUN_TO_BREAKPOINT.
-\note    8. Hitting a breakpoint does not clear/disable it; it must be cleared/disabled explicitly.
- 
-\param   number:  The number of the breakpoint block to use (>= 0).
-\param   address: The address of the Instruction Fetch breakpoint.
-
-\return  STATUS_OK:    The breakpoint was set.
-\n       STATUS_ERROR: The breakpoint was not set.
-
-\par     Error codes:
-         PARAMETER_ERR
-\n		 NO_DEVICE_ERR
-\n       BREAKPOINT_ERR
-*/
-DLL430_SYMBOL STATUS_T WINAPI MSP430_Breakpoint(LONG number, LONG address);
-
-#define MSP430_Clear_Breakpoint(NUMBER) MSP430_Breakpoint(NUMBER, 0)
 
 /**
 \fn    STATUS_T MSP430_Run(LONG mode, LONG releaseJTAG);
@@ -565,114 +530,6 @@ DLL430_SYMBOL STATUS_T WINAPI MSP430_CcGetModuleNames(LONG localDeviceId, EemMcl
 #endif
 
 
-// Enhanced Emulation Module functions ----------------------------------------
-
-/* ----------------------------------------------------------------------------
-
-   The following functions implement a very low-level interface to the Enhanced Emulation Module (EEM).
-   The EEM provides advanced debugging facilities (including advanced breakpoints, trace buffers, etc.).
-   Please contact Texas Instruments to obtain the detailed information and device specifications required
-   to make use of this mechanism.
-
-   ----------------------------------------------------------------------------
-*/
-
-/**
-\fn    STATUS_T MSP430_EEM_Open(void);
-
-\brief   Open the Enhanced Emulation Module (EEM).
-
-\note    1. DO NOT call this function when using the Enhanced Emulation Module (EEM) API provided by MSP430_EEM.h!\n
-            This function is made available just due to downward compatibility.
-\note    2. MSP430_OpenDevice() must have been called prior to calling this function.
-
-\return  STATUS_OK:    The EEM was opened.
-\n       STATUS_ERROR: The EEM was not opened.
-
-\par     Error codes:
-         DEVICE_UNKNOWN_ERR
-\n       EEM_OPEN_ERR
-*/
-DLL430_SYMBOL STATUS_T WINAPI MSP430_EEM_Open(void);
-
-/**
-\fn   LONG MSP430_EEM_Read_Register(LONG address);
-
-\brief   Read the EEM register at address "address".
-
-\note    1. DO NOT call this function when using the Enhanced Emulation Module (EEM) API provided by MSP430_EEM.h!\n
-            This function is made available just due to downward compatibility.
-\note    2. MSP430_OpenDevice() must have been called prior to calling this function.
-\note    3. No status is returned from this function; use MSP430_EEM_Read_Register_Test() if a status is desired.
-\note    4. MSP430_EEM_Open() will be called if required.
-
-\param   address: The address of the EEM register read.
-
-\return  The value read from the EEM register.
-*/
-DLL430_SYMBOL LONG WINAPI MSP430_EEM_Read_Register(LONG address);
-
-/**
-\fn   STATUS_T MSP430_EEM_Read_Register_Test(LONG address, LONG* value);
-
-\brief   Read the EEM register at address "address", and store the read value at "value".
-
-\note    1. DO NOT call this function when using the Enhanced Emulation Module (EEM) API provided by MSP430_EEM.h!\n
-            This function is made available just due to downward compatibility.
-\note    2. MSP430_OpenDevice() must have been called prior to calling this function.
-\note    3. MSP430_EEM_Open() will be called if required.
-
-\param   address: The address of the EEM register read.
-\param   value:   The address of where the read value is stored.
-
-\return  STATUS_OK:    The EEM read register operation encountered no errors.
-\n       STATUS_ERROR: The EEM read register operation encountered errors.
-
-\par     Error codes:
-         PARAMETER_ERR
-\n       EEM_OPEN_ERR
-\n       EEM_READ_ERR
-*/
-DLL430_SYMBOL STATUS_T WINAPI MSP430_EEM_Read_Register_Test(LONG address, LONG* value);
-
-/**
-\fn   STATUS_T MSP430_EEM_Write_Register(LONG address, LONG value);
-
-\brief   Write the EEM register at address "address" with value "value".
-
-\note    1. DO NOT call this function when using the Enhanced Emulation Module (EEM) API provided by MSP430_EEM.h!\n
-            This function is made available just due to downward compatibility.
-\note    2. MSP430_OpenDevice() must have been called prior to calling this function.
-\note    3. MSP430_EEM_Open() will be called if required.
-
-\param   address: The address of the EEM register written.
-\param   value:	  The value to be written into the EEM register.
-
-\return  STATUS_OK:    The EEM write register operation encountered no errors.
-\n       STATUS_ERROR: The EEM write register operation encountered errors.
-
-\par     Error codes:
-         PARAMETER_ERR
-\n       EEM_OPEN_ERR
-\n       EEM_WRITE_ERR
-*/
-DLL430_SYMBOL STATUS_T WINAPI MSP430_EEM_Write_Register(LONG address, LONG value);
-
-/**
-\fn   STATUS_T MSP430_EEM_Close(void);
-
-\brief   Close the Enhanced Emulation Module (EEM).
-
-\note    1. MSP430_OpenDevice() must have been called prior to calling this function.
-
-\return  STATUS_OK:    The EEM was closed.
-\n       STATUS_ERROR: The EEM was not closed.
-
-\par     Error codes:
-         DEVICE_UNKNOWN_ERR
-\n       EEM_CLOSE_ERR
-*/
-DLL430_SYMBOL STATUS_T WINAPI MSP430_EEM_Close(void);
 
 #if defined(__cplusplus)
 }

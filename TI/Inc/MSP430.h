@@ -3,7 +3,7 @@
  *
  * API for accessing MSP430 devices via JTAG.
  *
- * Copyright (C) 2004 - 2011 Texas Instruments Incorporated - http://www.ti.com/ 
+ * Copyright (C) 2004 - 2013 Texas Instruments Incorporated - http://www.ti.com/ 
  * 
  * 
  *  Redistribution and use in source and binary forms, with or without 
@@ -85,19 +85,17 @@
  \par         Developed using:
               MS Visual C++ 2003/2010
  
- \version     3.02.03.015
+ \version     3.03.01.003
   
  \par         Supported API calls:
               - MSP430_GetNumberOfUsbIfs()
               - MSP430_GetNameOfUsbIf()
-			  - MSP430_SET_SYSTEM_NOTIFY_CALLBACK()
+              - MSP430_SET_SYSTEM_NOTIFY_CALLBACK()
               - MSP430_Initialize()
               - MSP430_Close()
-              - MSP430_SPMA_SetKey()
               - MSP430_GetJtagID()
-			  - MSP430_GetFoundDevice()
-			  - MSP430_OpenDevice()
-			  - MSP430_Identify()
+              - MSP430_GetFoundDevice()
+              - MSP430_OpenDevice()
               - MSP430_Device()
               - MSP430_Configure()
               - MSP430_VCC()
@@ -116,9 +114,12 @@
               - MSP430_Error_String()
 
  \par         Version History:
-              - Version 3.2.00.007  -  02.11.2010
-			  - Version 3.2.01.009  -  10.18.2011
-
+              - Version 3.2.00.007  -  02/11/2010
+              - Version 3.2.01.009  -  10/18/2011
+              - Version 3.2.05.004  -  09/14/2012
+              - Version 3.3.00.005  -  01/29/2013
+              - Version 3.3.00.006  -  01/31/2013
+              - Version 3.3.01.003  -  06/24/2013
 */
 
 
@@ -161,7 +162,7 @@ typedef union DEVICE_T {
    /// this buffer holds the complete device information
    /// and is overlayed by the following information structure
     CHAR buffer[112];
-    struct {  // actually 108 Bytes
+    struct {  // actually 110 Bytes
       /// The value 0xaa55.
         WORD  endian;        
       /// Identification number.
@@ -236,28 +237,10 @@ typedef union DEVICE_T {
         WORD nSequencer;		
       /// Msp430 has FRAM Memory
         WORD HasFramMemroy;
+	  /// Flash segment size for Main
+		WORD mainSegmentSize;
     };
 } DEVICE_T_t;
-
-#pragma pack()
-
-/**
- \brief  SPMA access key structure.
-*/
-#pragma pack(1)
-typedef union SPMA_KEY_UNION {
-	uint16_t buffer[8]; /**< this buffer holds the SPMA access key */
-	struct {
-		uint16_t key_1; /**< Key 1 */
-		uint16_t key_2; /**< Key 2 */
-		uint16_t key_3; /**< Key 3 */
-		uint16_t key_4; /**< Key 4 */
-		uint16_t key_5; /**< Key 5 */
-		uint16_t key_6; /**< Key 6 */
-		uint16_t key_7; /**< Key 7 */
-		uint16_t key_8; /**< Key 8 */
-	};
-} SPMA_KEY_T;
 #pragma pack()
 
 
@@ -289,6 +272,7 @@ typedef enum RESET_METHOD {
 	FORCE_RESET = (1 << 3),
 
 	/// combines all possible reset methods enumerated in enum RESET_METHOD
+	/// !!DEPRECATED, do not use any longer
 	ALL_RESETS = (PUC_RESET | RST_RESET | VCC_RESET),
 	/// forces a Power up clear reset
 	FORCE_PUC_RESET = (FORCE_RESET | PUC_RESET),
@@ -297,6 +281,7 @@ typedef enum RESET_METHOD {
 	FORCE_RST_RESET = (FORCE_RESET | RST_RESET),
 	/// forces a Vcc clear reset
 	/// Non-Xv2 devices will be running and executing code after the reset
+	/// !!DEPRECATED, do not use any longer
 	FORCE_VCC_RESET = (FORCE_RESET | VCC_RESET),
 } RESET_METHOD_t;
 
@@ -313,11 +298,7 @@ typedef enum ERASE_TYPE {
 typedef enum CONFIG_MODE {
 	VERIFICATION_MODE = 0, /**< Verify data downloaded to FLASH memories */
 	EMULATION_MODE = 1, /**< 4xx emulation mode */
-	CLK_CNTRL_MODE = 2, /**< Clock control mode (on emulation stop) */
-	MCLK_CNTRL_MODE = 3, /**< Module Clock control mode (on emulation stop) */
-	FLASH_TEST_MODE = 4, /**< Flash test mode for Automotive Devices - Marginal Read */
 	LOCKED_FLASH_ACCESS = 5, /**< Allows Locked Info Mem Segment A access (if set to '1') */
-	FLASH_SWOP = 6, /**< Flash Swop mode for Automotive Devices */
 	EDT_TRACE_MODE = 7, /**< Trace mode in EDT file format */
 	INTERFACE_MODE = 8, /**< Configure interface protocol: JTAG or Spy-bi-Wire (see enum INTERFACE_TYPE) */
 
@@ -349,10 +330,13 @@ typedef enum CONFIG_MODE {
 	// previously set using MSP430_SET_SYSTEM_NOTIFY_CALLBACK()
     DEBUG_LPM_X = 14,
     // Configure JTAG speed
-    JTAG_SPEED = 15,
+    SET_INTERFACE_SPEED = 15,
 	// total device erase including IP protection 
-	TOTAL_ERASE_DEVICE = 16
-
+	TOTAL_ERASE_DEVICE = 16,
+    // Enable the CURRENTDRIVE FINE EnergyTrace Mode, for measuring small currents
+    ET_CURRENTDRIVE_FINE = 17,
+	//Enable software breakpoints
+	SOFTWARE_BREAKPOINTS = 18
 } CONFIG_MODE_t;
 
 /// Configurations values for CONFIG_MODE INTERFACE_MODE
@@ -363,37 +347,12 @@ typedef enum INTERFACE_TYPE {
 	AUTOMATIC_IF = 3 /**< Protocol will be detected automatically */
 } INTERFACE_TYPE_t;
 
-/**
- \brief     Flash Swop (Automotive Devices).
-
- \full      Swop any memory that is overlapped by the peripherals, RAM,
-            Bootstrap loader, etc. into the accessible address space.
-
- \note      1. See device datasheet for detailed information on
-               FLySWOP bit settings.
- \note      2. Use MSP430_Configure(FLASH_SWOP,FLASH_SWOP_CONFIG) to configure
-               device before erasing/programming memory. (Default: MAIN_MEMORY_ONLY)
-*/
-enum FLASH_SWOP_CONFIG {
-	/// Main Memory is mapped from 1000h to FFFFh
-	MAIN_MEMORY_ONLY = 0,
-
-	/// Main Memory is overlapped by Info Memory Segment B \n
-	/// Main Memory is mapped from 1080h to FFFFh          \n
-	/// Info Seg. B is mapped from 1000h to 107Fh
-	MAIN_PLUS_INFOB_OVERLAPPED = 1,
-
-	/// Current Flash Control register value is used       \n
-	/// for read/write/erase operations performed by the Dll
-	APPL_BYPASS = 2,
-};
-
-/// Definitions for the Flash Marginal Read Test
-typedef enum MARGINAL_READ {
-	FLASH_MARGINAL_READ_OFF = 0,
-	FLASH_MARGINAL_READ_0 = 1,
-	FLASH_MARGINAL_READ_1 = 2,
-} MARGINAL_READ_t;
+/// Configurations values for CONFIG_MODE INTERFACE_SPEED
+typedef enum INTERFACE_SPEED {
+	FAST = 0,			/**< INTERFACE_SPEED JTAG/SBW fast */
+	MEDIUM = 1,			/**< INTERFACE_SPEED JTAG/SBW medium */
+	SLOW = 2			/**< INTERFACE_SPEED JTAG/SBW slow */
+} INTERFACE_SPEED_t;
 
 /// File types.
 typedef enum FILE_TYPE {
@@ -472,7 +431,24 @@ typedef enum FILE_TYPE {
     ERROR_DEF(CDC_UIF_ERR, "CDC-USB-FET-Driver was not installed. Please install the driver") \
     ERROR_DEF(UIF_MANUAL_POWERCYCLE_NEEDED, "Manual reboot of USB-FET needed ! PLEASE unplug and reconnect your USB-FET!!") \
     ERROR_DEF(INTERNAL_ERR, "Internal error") \
-    ERROR_DEF(INVALID_ERR, "Invalid error number")
+	ERROR_DEF(FETRECOVERY_NEEDED, "One of the connected MSP-FETs / eZ-FETs debuggers needs recovery") \
+	ERROR_DEF(WRITE_EXTERNAL_MEM_ERR, "One of the connected MSP-FETs / eZ-FETs debuggers needs recovery") \
+    ERROR_DEF(FEATURE_NOT_SUPPORTED, "Feature not supported") \
+	ERROR_DEF(RECOVERY_MULTIPLE_UIF, "Only one MSP-FET / eZ-FET must be connected during recovery") \
+	ERROR_DEF(RECOVERY_FAILED, "MSP-FET / eZ-FET recovery failed") \
+	ERROR_DEF(UPDATE_CORE_ERR, "MSP-FET / eZ-FET core(communication layer) update failed") \
+	ERROR_DEF(UPDATE_MODULE_ERR, "MSP-FET / eZ-FET legacy module update failed") \
+	ERROR_DEF(ET_NOT_SUPPORTED, "Energy Trace is not supported by the selected hardware") \
+	ERROR_DEF(HARDWARE_STATE_UNKNOWN, "Hardware State is unknown") \
+	ERROR_DEF(DEVICE_CRC_WRONG, "Device configuration data inconsistent. Please discontinue using/replace target device.") \
+	ERROR_DEF(EEM_NOT_ACCESSIBLE, "EEM module not accessible while running in Ultra Low Power Debug Mode - Deactivate Ultra Low Power Debug mode to enable this feature") \
+	ERROR_DEF(REMOVE_SOFTWARE_BREAKPOINT_ERR, "Failed to remove software breakpoints, please reprogram target device") \
+	ERROR_DEF(TRIGGER_CONFLICT_ERR, "Trigger configuration conflicts with existing triggers") \
+	ERROR_DEF(TARGET_RUNNING_ERR, "Operation not possible while device is running") \
+	ERROR_DEF(INCOMPATIBLE_WITH_SW_BREAKPOINT_API, "This function can not be used when software breakpoints are enabled") \
+	ERROR_DEF(SPEED_CONFIG_ERR, "JTAG/SBW speed configuration failed") \
+	ERROR_DEF(INVALID_ERR, "Invalid error number")
+
 
 /// Error codes
 #define ERROR_DEF(errorEnum, errorString) errorEnum,
@@ -586,26 +562,6 @@ DLL430_SYMBOL STATUS_T WINAPI MSP430_Initialize(CHAR* port, LONG* version);
 */
 DLL430_SYMBOL STATUS_T WINAPI MSP430_Close(LONG vccOff);
 
-/**
-\fn    STATUS_T MSP430_SPMA_SetKey(SPMA_KEY_T* key);
-
-\brief   Used to pass a valid SPMA key to the DLL.
-         The SPMA key is buffered in a global variable of the type SPMA_KEY_T.
-		 MSP430_Identify() sends the buffered key to the target device in case
-		 of an activated SPMA is detected.
-
-\note    1. MSP430_Initialize() must be called prior to this function.
-\note    2. Must be called prior to MSP430_Identify().
- 
-\param   key: A pointer to a variable of the type SPMA_KEY_T which holds
-              an access key for the SPMA.
-
-\return  STATUS_OK:    The SPMA key was set.
-\n       STATUS_ERROR: The SPMA key was NOT set.
-
-\par     Error codes:
-*/
-DLL430_SYMBOL STATUS_T WINAPI MSP430_SPMA_SetKey(SPMA_KEY_T* key);
 
 /**
 \fn    STATUS_T MSP430_GetJtagID(LONG* JtagId);
@@ -677,34 +633,6 @@ STATUS_T WINAPI MSP430_GetFoundDevice(CHAR* FoundDevice, LONG count);
 */
 STATUS_T WINAPI MSP430_OpenDevice(CHAR* Device,CHAR* Password, LONG PwLength,LONG DeviceCode, LONG setId);
 
-/**
-\fn    STATUS_T MSP430_Identify(CHAR* buffer, LONG count, LONG setId);
-
-\brief   Identify the device, and obtain device information.
-
-\deprecated Use MSP430_OpenDevice() and MSP430_GetFoundDevice() instead
-
-\note    1. It is possible to successfully (i.e. return status: STATUS_OK) identify an "UNKNOWN DEVICE".
-\note    2. Use setId and MSP430_State(state, TRUE, FALSE) to stop a running device (without resetting it).
-\note    3. Following MSP430_Identify():
-            - the device is reset, is not executing, and is under JTAG control.
-            - the JTAG interface is enabled and the JTAG signals are negated.
- 
-\param   buffer: A pointer to a buffer where the device identity and information is stored. See DEVICE_T for details.
-\param   count: The number of bytes to return in the buffer (i.e., the buffer size). Must be at least sizeof(DEVICE_T)
-\param   setId: If setId is not DEVICE_UNKNOWN, the device is set to setId. Otherwise the device is determined.
-
-\return  STATUS_OK:    The device identify and information was obtained.
-\n       STATUS_ERROR: The device identity and information was not obtained.
-
-\par     Error codes:
-         PARAMETER_ERR
-\n       NO_DEVICE_ERR
-\n       READ_MEMORY_ERR
-\n       READ_FUSES_ERR
-\n       CONFIGURATION_ERR
-*/
-DLL430_SYMBOL STATUS_T WINAPI MSP430_Identify(CHAR* buffer, LONG count, LONG setId);
 
 /**
 \fn    STATUS_T MSP430_Device(LONG localDeviceId, CHAR* buffer, LONG count);
@@ -1011,7 +939,7 @@ DLL430_SYMBOL STATUS_T WINAPI MSP430_ReadOutFile(LONG wStart, LONG wLength, CHAR
          The device is optionally erased prior to being written. The device is optionally
          verified after being written.
 
-\note    1. MSP430_Identify() must have been called prior to calling this function.    
+\note    1. MSP430_OpenDevice() must have been called prior to calling this function.    
 \note    2. The file type must be one of TI text or Intel hex. 
 \note    3. verifyMem operation does not read the device memory and compare it to the file.
             Instead, this operation computes a checksum for the device memory, and

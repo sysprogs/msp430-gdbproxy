@@ -42,9 +42,9 @@ typedef char CHAR;
 typedef uint8_t BYTE;
 typedef uint16_t WORD;
 typedef long LONG;
-typedef long long LONGLONG;
+typedef int64_t LONGLONG;
 typedef unsigned long ULONG;
-typedef unsigned int UINT;
+typedef uint32_t UINT;
 
 #define FALSE 0
 #define TRUE 1

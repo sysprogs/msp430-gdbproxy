@@ -21,7 +21,10 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize(const GlobalSettings &settings)
 	if (MSP430_VCC(settings.Voltage) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot enable Vcc", false);
 
-	if (MSP430_Identify((char *)&m_DeviceInfo, sizeof(m_DeviceInfo), DEVICE_UNKNOWN) != STATUS_OK)
+	if (MSP430_OpenDevice("DEVICE_UNKNOWN", "", 0, 0, DEVICE_UNKNOWN) != STATUS_OK)
+		REPORT_AND_RETURN("Cannot identify the MSP430 device", false);
+
+	if (MSP430_GetFoundDevice((char *)&m_DeviceInfo, sizeof(m_DeviceInfo)) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot identify the MSP430 device", false);
 
 	if (MSP430_Reset(ALL_RESETS, FALSE, FALSE) != STATUS_OK)
@@ -46,7 +49,6 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize(const GlobalSettings &settings)
 	printf("%d bytes of INFO memory (0x%04x-0x%04x)\n", m_DeviceInfo.infoEnd - m_DeviceInfo.infoStart + 1, m_DeviceInfo.infoStart, m_DeviceInfo.infoEnd);
 
 	m_UsedBreakpoints.resize(m_DeviceInfo.nBreakpoints);
-
 	m_bValid = true;
 	return true;
 }
@@ -197,8 +199,13 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::WriteTargetRegisters( int thread
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadTargetMemory( ULONGLONG Address, void *pBuffer, size_t *pSizeInBytes )
 {
+	size_t readSize = *pSizeInBytes;
 	if (MSP430_Read_Memory((LONG)Address, (char *)pBuffer, *pSizeInBytes) != STATUS_OK)
-		REPORT_AND_RETURN("Cannot read device memory", kGDBUnknownError);
+	{
+		char szMsg[256];
+		_snprintf(szMsg, _TRUNCATE, "Cannot read %d memory bytes at 0x%I64X", readSize, Address);
+		REPORT_AND_RETURN(szMsg, kGDBUnknownError);
+	}
 	return kGDBSuccess;
 }
 
@@ -240,36 +247,14 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::Terminate()
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::CreateBreakpoint( BreakpointType type, ULONGLONG Address, unsigned kind, OUT INT_PTR *pCookie )
 {
-	if ((type == bptHardwareBreakpoint) || (type == bptSoftwareBreakpoint))
-	{
-		for (size_t i = 0; i < m_UsedBreakpoints.size(); i++)
-		{
-			if (!m_UsedBreakpoints[i])
-			{
-				if (MSP430_Breakpoint(i, (LONG)Address) != STATUS_OK)
-					REPORT_AND_RETURN("Cannot set a hardware breakpoint", kGDBUnknownError);
-				m_UsedBreakpoints[i] = true;
-				*pCookie = i;
-				return kGDBSuccess;
-			}
-		}
-		printf("Warning! Out of hardware breakpoints. Please use the EEM mode for software breakpoint support.\n");
+	printf("Warning! Breakpoints are no longer supported in non-EEM mode.\n");
 		return kGDBUnknownError;
-	}
-	return kGDBNotSupported;
 }
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::RemoveBreakpoint( BreakpointType type, ULONGLONG Address, INT_PTR Cookie )
 {
-	if ((type == bptHardwareBreakpoint) || (type == bptSoftwareBreakpoint))
-	{
-		size_t i = (size_t)Cookie;
-		MSP430_Clear_Breakpoint(i);
-		m_UsedBreakpoints[i] = false;
-
-		return kGDBSuccess;
-	}
-	return kGDBNotSupported;
+	printf("Warning! Breakpoints are no longer supported in non-EEM mode.\n");
+		return kGDBUnknownError;
 }
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::EraseFLASH( ULONGLONG addr, size_t length )

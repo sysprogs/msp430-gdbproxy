@@ -1,4 +1,3 @@
-MAIN_SEGMENT_SIZE
 #include "stdafx.h"
 #include "MSP430EEMTarget.h"
 
@@ -94,9 +93,6 @@ MSP430Proxy::MSP430EEMTarget::~MSP430EEMTarget()
 
 		MSP430_EEM_SetBreakpoint(&m_SoftwareBreakpointWrapperHandle, &bkpt);
 	}
-
-	if (m_bEEMInitialized)
-		MSP430_EEM_Close();
 }
 
 void MSP430Proxy::MSP430EEMTarget::EEMNotificationHandler( MSP430_MSG wMsg, WPARAM wParam, LPARAM lParam )
@@ -375,7 +371,8 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoRemoveCodeBreakpo
 
 		if (MSP430_EEM_SetBreakpoint(&bpHandle, &bkpt) != STATUS_OK)
 			REPORT_AND_RETURN("Cannot remove an EEM breakpoint", kGDBUnknownError);
-		m_HardwareBreakpointsUsed--;
+		if(hardware)
+			m_HardwareBreakpointsUsed--;
 		return kGDBSuccess;
 	}
 	else
@@ -399,5 +396,4 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoRemoveCodeBreakpo
 
 		return kGDBSuccess;
 	}
-
 }

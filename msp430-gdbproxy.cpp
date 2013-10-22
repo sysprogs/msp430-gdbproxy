@@ -60,10 +60,12 @@ public:
 	virtual IGDBStub *CreateStub(GDBServer *pServer)
 	{
 		MSP430GDBTarget *pTarget;
-		if (m_Settings.EnableEEMMode)
-			pTarget = new MSP430EEMTarget();
-		else
-			pTarget = new MSP430GDBTarget();
+
+
+		if (!m_Settings.EnableEEMMode)
+			printf("Warning: Non-EEM mode is no longer supported. Switching to EEM mode.\n");
+
+		pTarget = new MSP430EEMTarget();
 
 		if (!g_SessionMonitor.RegisterSession(pTarget))
 		{

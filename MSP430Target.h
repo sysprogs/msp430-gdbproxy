@@ -37,7 +37,7 @@ namespace MSP430Proxy
 		void ReportLastMSP430Error(const char *pHint);
 		virtual bool DoResumeTarget(RUN_MODES_t mode);
 
-	public:
+	protected:
 		MSP430GDBTarget()
 			: m_bClosePending(false)
 			, m_bValid(false)
@@ -46,7 +46,7 @@ namespace MSP430Proxy
 			, m_bFLASHCommandsUsed(false)
 		{
 		}
-
+	public:
 		~MSP430GDBTarget();
 
 		//! Starts debugging session
