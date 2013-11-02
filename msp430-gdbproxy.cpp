@@ -233,7 +233,8 @@ int main(int argc, char* argv[])
 	}
 
 	status = MSP430_Close(FALSE);
-	printf("MSP430_Close() returned %d\n", status);
+	if (settings.Verbose)
+		printf("MSP430_Close() returned %d\n", status);
 
 	GDBServer srv(new MSP430StubFactory(settings));
 	ActionStatus st = srv.Start(settings.ListenPort);
