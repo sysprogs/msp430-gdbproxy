@@ -243,7 +243,7 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	printf("msp430-gdbproxy++ v1.3 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
+	printf("msp430-gdbproxy++ v1.4 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
 	if (!settings.NoHint)
 	{
 		printf("\nRun \"msp430-gdbproxy --help\" to learn about command line options.\n\
