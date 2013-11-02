@@ -114,6 +114,9 @@ All options are optional:\n\
   --keepalive - Keep running after GDB disconnects, wait for next connection\n\
   --autoerase - Erase FLASH when debugging is started\n\
   --nohint - Do not show the 'how to start debugging' message\n\
+  --verbose - Enable verbose diagnostic output\n\
+  --iface=jtag/sbw/sbwjtag/auto - Specify connection interface\n\
+  --ifacespeed=slow/medium/fast - Specify interface speed\n\
 ");
 }
 
@@ -141,6 +144,8 @@ void ParseOptions(int argc, char* argv[], GlobalSettings &settings)
 			settings.EnableEEMMode = false;
 		else if (arg == "keepbp")
 			settings.InstantBreakpointCleanup = false;
+		else if (arg == "verbose")
+			settings.Verbose = true;
 		else if (arg == "bp_insn")
 		{
 			if (strlen(val) < 3 || _memicmp(val, "0x", 2))
@@ -175,6 +180,30 @@ void ParseOptions(int argc, char* argv[], GlobalSettings &settings)
 			settings.AutoErase = true;
 		else if (arg == "nohint")
 			settings.NoHint = true;
+		else if (arg =="iface")
+		{
+			if (!val)
+				continue;
+			if (!strcmp(val, "jtag"))
+				settings.Interface = Jtag;
+			else if (!strcmp(val, "sbw"))
+				settings.Interface = SpyBiWare;
+			else if (!strcmp(val, "sbwjtag"))
+				settings.Interface = JtagOverSpyBiWare;
+			else if (!strcmp(val, "auto"))
+				settings.Interface = AutomaticInterface;
+		}
+		else if (arg =="ifacespeed")
+		{
+			if (!val)
+				continue;
+			if (!strcmp(val, "fast"))
+				settings.InterfaceSpeed = Fast;
+			else if (!strcmp(val, "medium"))
+				settings.InterfaceSpeed = Medium;
+			else if (!strcmp(val, "slow"))
+				settings.InterfaceSpeed = Slow;
+		}
 	}
 }
 
@@ -193,13 +222,18 @@ int main(int argc, char* argv[])
 
 	LONG version = 0;
 	STATUS_T status = MSP430_Initialize((char *)settings.PortName, &version);
+	if (settings.Verbose)
+		printf("MSP430_Initialize(%s) => status = %d, version = %d\n", settings.PortName, status, version);
+
 	if (status != STATUS_OK)
 	{
 		printf("Cannot initalize MSP430.DLL on port %s:\n\t%s\n", settings.PortName, GetLastMSP430Error());
 		printf("\nRun msp430-gdbproxy --help for usage instructions.\n");
 		return 1;
 	}
-	MSP430_Close(FALSE);
+
+	status = MSP430_Close(FALSE);
+	printf("MSP430_Close() returned %d\n", status);
 
 	GDBServer srv(new MSP430StubFactory(settings));
 	ActionStatus st = srv.Start(settings.ListenPort);
@@ -209,7 +243,7 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	printf("msp430-gdbproxy++ v1.01 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
+	printf("msp430-gdbproxy++ v1.3 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
 	if (!settings.NoHint)
 	{
 		printf("\nRun \"msp430-gdbproxy --help\" to learn about command line options.\n\

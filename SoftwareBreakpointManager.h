@@ -56,6 +56,7 @@ namespace MSP430Proxy
 		unsigned short m_BreakInstruction;
 
 		bool m_bInstantCleanup;
+		bool m_bVerbose;
 
 		struct TranslatedAddr
 		{
@@ -100,7 +101,7 @@ namespace MSP430Proxy
 				   to set another breakpoint.
 			\remarks The size of the FLASH erase block is assumed to be a constant of 512 bytes.
 		*/
-		SoftwareBreakpointManager(unsigned flashStart, unsigned flashEnd, unsigned short breakInstruction, bool instantCleanup);
+		SoftwareBreakpointManager(unsigned flashStart, unsigned flashEnd, unsigned short breakInstruction, bool instantCleanup, bool verbose);
 	};
 }
 

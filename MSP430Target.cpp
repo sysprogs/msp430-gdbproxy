@@ -13,10 +13,62 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize(const GlobalSettings &settings)
 	if (m_bClosePending)
 		return m_bValid;
 
+	m_bVerbose = settings.Verbose;
+
 	LONG version = 0;
 	if (MSP430_Initialize((char *)settings.PortName, &version) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot initialize MSP430.DLL", false);
 	m_bClosePending = true;
+
+	switch(settings.Interface)
+	{
+	case Jtag:
+		if (m_bVerbose)
+			printf("Selecting JTAG interface...\n");
+		if (MSP430_Configure(INTERFACE_MODE, JTAG_IF) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot select JTAG interface", false);
+		break;
+	case SpyBiWare:
+		if (m_bVerbose)
+			printf("Selecting Spy-bi-Wire interface...\n");
+		if (MSP430_Configure(INTERFACE_MODE, SPYBIWIRE_IF) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot select Spy-bi-Wire interface", false);
+		break;
+	case JtagOverSpyBiWare:
+		if (m_bVerbose)
+			printf("Selecting JTAG-over-Spy-bi-Wire interface...\n");
+		if (MSP430_Configure(INTERFACE_MODE, SPYBIWIREJTAG_IF) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot select JTAG-over-Spy-bi-Wire interface", false);
+		break;
+	case AutomaticInterface:
+		if (m_bVerbose)
+			printf("Selecting auto interface...\n");
+		if (MSP430_Configure(INTERFACE_MODE, AUTOMATIC_IF) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot select auto interface", false);
+		break;
+	}
+
+	switch(settings.InterfaceSpeed)
+	{
+	case Slow:
+		if (m_bVerbose)
+			printf("Setting interface speed to slow...\n");
+		if (MSP430_Configure(SET_INTERFACE_SPEED, SLOW) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot set interface speed", false);
+		break;
+	case Medium:
+		if (m_bVerbose)
+			printf("Setting interface speed to medium...\n");
+		if (MSP430_Configure(SET_INTERFACE_SPEED, MEDIUM) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot set interface speed", false);
+		break;
+	case Fast:
+		if (m_bVerbose)
+			printf("Setting interface speed to fast...\n");
+		if (MSP430_Configure(SET_INTERFACE_SPEED, FAST) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot set interface speed", false);
+		break;
+	}
 
 	if (MSP430_VCC(settings.Voltage) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot enable Vcc", false);
@@ -68,11 +120,23 @@ MSP430Proxy::MSP430GDBTarget::~MSP430GDBTarget()
 
 bool MSP430Proxy::MSP430GDBTarget::WaitForJTAGEvent()
 {
+	LONGLONG lastReportTime = {0,};
 	for (;;)
 	{
 		LONG state = 0;
 		if (MSP430_State(&state, m_BreakInPending, NULL) != STATUS_OK)
 			REPORT_AND_RETURN("Cannot query device state", false);
+
+		if (m_bVerbose)
+		{
+			LONGLONG currentTime = {0,};
+			GetSystemTimeAsFileTime(reinterpret_cast<FILETIME *>(&currentTime));
+			if ((currentTime - lastReportTime) > (3000000))	//300ms
+			{
+				printf("MSP430_State() => %d, break-in %s\n", state, m_BreakInPending ? "requested" : "not requested");
+			}
+		}
+
 		if (state != RUNNING)
 		{
 			m_BreakInPending = false;
@@ -206,6 +270,10 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadTargetMemory( ULONGLONG Addr
 		_snprintf(szMsg, _TRUNCATE, "Cannot read %d memory bytes at 0x%I64X", readSize, Address);
 		REPORT_AND_RETURN(szMsg, kGDBUnknownError);
 	}
+
+	if (m_bVerbose)
+		printf("MSP430_Read_Memory(0x%x, %d) => success\n", (LONG)Address, *pSizeInBytes);
+
 	return kGDBSuccess;
 }
 
@@ -248,13 +316,13 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::Terminate()
 GDBServerFoundation::GDBStatus MSP430GDBTarget::CreateBreakpoint( BreakpointType type, ULONGLONG Address, unsigned kind, OUT INT_PTR *pCookie )
 {
 	printf("Warning! Breakpoints are no longer supported in non-EEM mode.\n");
-		return kGDBUnknownError;
+	return kGDBUnknownError;
 }
 
 GDBServerFoundation::GDBStatus MSP430GDBTarget::RemoveBreakpoint( BreakpointType type, ULONGLONG Address, INT_PTR Cookie )
 {
 	printf("Warning! Breakpoints are no longer supported in non-EEM mode.\n");
-		return kGDBUnknownError;
+	return kGDBUnknownError;
 }
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::EraseFLASH( ULONGLONG addr, size_t length )
@@ -290,7 +358,11 @@ void MSP430Proxy::MSP430GDBTarget::ReportLastMSP430Error( const char *pHint )
 
 bool MSP430Proxy::MSP430GDBTarget::DoResumeTarget( RUN_MODES_t mode )
 {
-	if (MSP430_Run(mode, FALSE) != STATUS_OK)
+	STATUS_T status = MSP430_Run(mode, FALSE);
+	if (m_bVerbose)
+		printf("MSP430_Run(%d) => %d\n", mode, status);
+
+	if (status != STATUS_OK)
 		REPORT_AND_RETURN("Cannot resume device", false);
 
 	return true;

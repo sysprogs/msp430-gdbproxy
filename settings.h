@@ -9,6 +9,23 @@ namespace MSP430Proxy
 		SoftwareOnly,
 	};
 
+	enum HardwareInterface
+	{
+		UnspecifiedInterface,
+		Jtag,
+		SpyBiWare,
+		JtagOverSpyBiWare,
+		AutomaticInterface,
+	};
+
+	enum HardwareInterfaceSpeed
+	{
+		UnspecifiedSpeed,
+		Fast,
+		Medium,
+		Slow
+	};
+
 	struct GlobalSettings
 	{
 		bool EnableEEMMode;
@@ -21,6 +38,9 @@ namespace MSP430Proxy
 		bool SingleSessionOnly;
 		bool AutoErase;
 		bool NoHint;
+		bool Verbose;
+		HardwareInterface Interface;
+		HardwareInterfaceSpeed InterfaceSpeed;
 
 		GlobalSettings()
 		{
@@ -34,6 +54,9 @@ namespace MSP430Proxy
 			SingleSessionOnly = true;
 			AutoErase = false;
 			NoHint = false;
+			Verbose = false;
+			Interface = UnspecifiedInterface;
+			InterfaceSpeed = UnspecifiedSpeed;
 		}
 	};
 }

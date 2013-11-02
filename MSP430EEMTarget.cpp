@@ -41,6 +41,7 @@ bool MSP430Proxy::MSP430EEMTarget::Initialize(const GlobalSettings &settings)
 		return false;
 
 	m_BreakpointPolicy = settings.SoftBreakPolicy;
+	m_BreakpointInstruction = settings.BreakpointInstruction;
 
 	MESSAGE_ID msgs = {0,};
 	msgs.uiMsgIdSingleStep = WMX_SINGLESTEP;
@@ -71,12 +72,18 @@ bool MSP430Proxy::MSP430EEMTarget::Initialize(const GlobalSettings &settings)
 		bkpt.lMask = 0xffff;
 		if (MSP430_EEM_SetBreakpoint(&m_SoftwareBreakpointWrapperHandle, &bkpt) != STATUS_OK)
 			REPORT_AND_RETURN("Cannot create a MDB breakpoint for handling software breakpoints", false);
+		if (m_bVerbose)
+			printf("Registered software breakpoint support. Breakpoint instruction: 0x%x; meta-breakpoint handle: %d\n", m_BreakpointInstruction, m_SoftwareBreakpointWrapperHandle);
 		m_HardwareBreakpointsUsed++;
 	}
 	else
+	{
 		m_SoftwareBreakpointWrapperHandle = -1;
+		if (m_bVerbose)
+			printf("Warning: Software breakpoints disabled by configuration\n");
+	}
 
-	m_pBreakpointManager = new SoftwareBreakpointManager(m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd, settings.BreakpointInstruction, settings.InstantBreakpointCleanup);
+	m_pBreakpointManager = new SoftwareBreakpointManager(m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd, settings.BreakpointInstruction, settings.InstantBreakpointCleanup, settings.Verbose);
 
 	return true;
 }
@@ -91,17 +98,24 @@ MSP430Proxy::MSP430EEMTarget::~MSP430EEMTarget()
 		memset(&bkpt, 0, sizeof(bkpt));
 		bkpt.bpMode = BP_CLEAR;
 
-		MSP430_EEM_SetBreakpoint(&m_SoftwareBreakpointWrapperHandle, &bkpt);
+		STATUS_T status = MSP430_EEM_SetBreakpoint(&m_SoftwareBreakpointWrapperHandle, &bkpt);
+		if (m_bVerbose)
+			printf("Unregistering software breakpoint support => %d, bpHandle = %d\n", status, m_SoftwareBreakpointWrapperHandle);
 	}
 }
 
 void MSP430Proxy::MSP430EEMTarget::EEMNotificationHandler( MSP430_MSG wMsg, WPARAM wParam, LPARAM lParam )
 {
+	if (m_bVerbose)
+		printf("EEM notification: 0x%x\n", wMsg);
+
 	switch(wMsg)
 	{
 	case WMX_BREKAPOINT:
 	case WMX_SINGLESTEP:
 	case WMX_STOPPED:
+		if (m_bVerbose)
+			printf("Target stop detected\n");
 		m_LastStopEvent = wMsg;
 		m_TargetStopped.Set();
 		break;
@@ -118,6 +132,8 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 {
 	for (;;)
 	{
+		if (m_bVerbose)
+			printf("Waiting for the target to stop (EEM event will be generated)...\n");
 		m_TargetStopped.Wait();
 
 		bool breakIn = m_BreakInPending;
@@ -128,6 +144,9 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 		if (MSP430_Read_Register(&regPC, PC) != STATUS_OK)
 			REPORT_AND_RETURN("Cannot read PC register", false);
 
+		if (m_bVerbose)
+			printf("Target stopped, PC = 0x%x\n", regPC);
+
 		SoftwareBreakpointManager::BreakpointState bpState = m_pBreakpointManager->GetBreakpointState(regPC - 2);
 		if (m_RAMBreakpoints.IsBreakpointPresent((USHORT)regPC - 2))
 			bpState = SoftwareBreakpointManager::BreakpointActive;
@@ -136,6 +155,9 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 		{
 		case SoftwareBreakpointManager::BreakpointActive:
 		case SoftwareBreakpointManager::BreakpointInactive:
+			if (m_bVerbose)
+				printf("Found a software breakpoint at PC = 0x%X\n", regPC - 2);
+
 			regPC -= 2;
 
 			if (regPC == m_BreakpointAddrOfLastResumeOp)
@@ -144,6 +166,8 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 				//We don't want to stop indefinitely here.
 				if (m_LastResumeMode != SINGLE_STEP)
 				{
+					if (m_bVerbose)
+						printf("Resuming execution after a software breakpoint\n");
 					if (!DoResumeTarget(m_LastResumeMode))
 						return false;
 					continue;
@@ -156,6 +180,9 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 
 			if (bpState == SoftwareBreakpointManager::BreakpointInactive && m_LastResumeMode != SINGLE_STEP && !breakIn)
 			{
+				if (m_bVerbose)
+					printf("Breakpoint at PC = 0x%X is inactive. Skipping...\n", regPC);
+
 				//Skip the breakpoint
 				if (!DoResumeTarget(m_LastResumeMode))
 					return false;
@@ -269,14 +296,27 @@ bool MSP430Proxy::MSP430EEMTarget::DoResumeTarget( RUN_MODES_t mode )
 		printf("ERROR: Cannot commit software breakpoints\n");
 		return false;
 	}
-	return __super::DoResumeTarget(mode);
+	
+	if (!__super::DoResumeTarget(mode))
+		return false;
+
+	if (m_BreakInPending)
+	{
+		if (m_bVerbose)
+			printf("Break-in request already pending when resuming the target. Re-sending break-in request to MSP430.DLL.\n");
+		SendBreakInRequestAsync();
+	}
+	return true;
 }
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::SendBreakInRequestAsync()
 {
-	LONG state;
+	LONG state = 0;
 	m_BreakInPending = true;
-	if (MSP430_State(&state, TRUE, NULL) != STATUS_OK)
+	STATUS_T status = MSP430_State(&state, TRUE, NULL);
+	if (m_bVerbose)
+		printf("Break-in request: MSP430_State() => %d, state = %d\n", status, state);
+	if (status != STATUS_OK)
 		REPORT_AND_RETURN("Cannot stop device", kGDBNotSupported);
 	return kGDBSuccess;
 }
@@ -318,6 +358,9 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoCreateCodeBreakpo
 		if (MSP430_EEM_SetBreakpoint(&bpHandle, &bkpt) != STATUS_OK)
 			REPORT_AND_RETURN("Cannot set an EEM breakpoint", kGDBUnknownError);
 
+		if (m_bVerbose)
+			printf("Created a hardware breakpoint #%d at 0x%x\n", bpHandle, (ULONG)Address);
+
 		m_HardwareBreakpointsUsed++;
 
 		C_ASSERT(sizeof(bpHandle) == 2);
@@ -340,6 +383,9 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoCreateCodeBreakpo
 			unsigned short insn;
 			if (MSP430_Read_Memory(addr, (char *)&insn, 2) != STATUS_OK)
 				REPORT_AND_RETURN("Cannot set a software breakpoint in RAM", kGDBUnknownError);
+
+			if (m_bVerbose)
+				printf("Setting a RAM breakpoint at 0x%x. Previous instruction is 0x%x\n", addr, insn);
 			
 			*pCookie = MAKE_BP_COOKIE(kBpCookieTypeSoftwareRAM, insn);
 
@@ -371,8 +417,11 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoRemoveCodeBreakpo
 
 		if (MSP430_EEM_SetBreakpoint(&bpHandle, &bkpt) != STATUS_OK)
 			REPORT_AND_RETURN("Cannot remove an EEM breakpoint", kGDBUnknownError);
-		if(hardware)
-			m_HardwareBreakpointsUsed--;
+
+		if (m_bVerbose)
+			printf("Removed a hardware breakpoint #%d at 0x%x\n", (WORD)(Cookie & kBpCookieDataMask), (ULONG)Address);
+
+		m_HardwareBreakpointsUsed--;
 		return kGDBSuccess;
 	}
 	else
@@ -381,6 +430,9 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::DoRemoveCodeBreakpo
 		{
 			ASSERT((Cookie & kBpCookieTypeMask) == kBpCookieTypeSoftwareRAM);
 			unsigned short originalINSN = (unsigned short)(Cookie & kBpCookieDataMask);
+
+			if (m_bVerbose)
+				printf("Deleting SRAM breakpoint at 0x%x. Restoring original instruction of 0x%x.\n", (ULONG)Address, originalINSN);
 
 			if (MSP430_Write_Memory(Address & ~1, (char *)&originalINSN, 2) != STATUS_OK)
 				REPORT_AND_RETURN("Cannot remove a software breakpoint from RAM", kGDBUnknownError);

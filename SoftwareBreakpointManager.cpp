@@ -5,12 +5,13 @@
 
 using namespace MSP430Proxy;
 
-MSP430Proxy::SoftwareBreakpointManager::SoftwareBreakpointManager( unsigned flashStart, unsigned flashEnd, unsigned short breakInstruction, bool instantCleanup )
+MSP430Proxy::SoftwareBreakpointManager::SoftwareBreakpointManager( unsigned flashStart, unsigned flashEnd, unsigned short breakInstruction, bool instantCleanup, bool verbose )
 	: m_FlashStart(flashStart)
 	, m_FlashEnd(flashEnd)
 	, m_FlashSize(flashEnd - flashStart + 1)
 	, m_BreakInstruction(breakInstruction)
 	, m_bInstantCleanup(instantCleanup)
+	, m_bVerbose(verbose)
 {
 	ASSERT(!(m_FlashSize & 1));
 	size_t segmentCount = (m_FlashSize + MAIN_SEGMENT_SIZE - 1) / MAIN_SEGMENT_SIZE;
@@ -121,6 +122,8 @@ bool MSP430Proxy::SoftwareBreakpointManager::CommitBreakpoints()
 				m_Segments[i].BpState[j] = NoBreakpoint;
 				data[j] = m_Segments[i].OriginalInstructions[j];
 				eraseNeeded = true;
+				if (m_bVerbose)
+					printf("Restoring original FLASH instruction at 0x%x\n", segBase + j * 2);
 				break;
 			case BreakpointPending:
 				m_Segments[i].BpState[j] = BreakpointActive;
@@ -128,6 +131,9 @@ bool MSP430Proxy::SoftwareBreakpointManager::CommitBreakpoints()
 				
 				if ((data[j] & m_BreakInstruction) != m_BreakInstruction)
 					eraseNeeded = true;
+
+				if (m_bVerbose)
+					printf("Inserting a FLASH breakpoint at 0x%x, sector erase %s\n", segBase + j * 2, eraseNeeded ? "pending" : "not pending");
 
 				data[j] = m_BreakInstruction;
 				break;

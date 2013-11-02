@@ -22,6 +22,7 @@ namespace MSP430Proxy
 	{
 	protected:
 		DEVICE_T m_DeviceInfo;
+		bool m_bVerbose;
 
 	private:
 		bool m_bClosePending, m_bValid;
@@ -41,6 +42,7 @@ namespace MSP430Proxy
 		MSP430GDBTarget()
 			: m_bClosePending(false)
 			, m_bValid(false)
+			, m_bVerbose(false)
 			, m_BreakInPending(false)
 			, m_bFLASHErased(false)
 			, m_bFLASHCommandsUsed(false)
