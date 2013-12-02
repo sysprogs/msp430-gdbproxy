@@ -70,8 +70,11 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize(const GlobalSettings &settings)
 		break;
 	}
 
-	if (MSP430_VCC(settings.Voltage) != STATUS_OK)
-		REPORT_AND_RETURN("Cannot enable Vcc", false);
+	if (settings.Voltage != 0)
+	{
+		if (MSP430_VCC(settings.Voltage) != STATUS_OK)
+			REPORT_AND_RETURN("Cannot enable Vcc", false);
+	}
 
 	if (MSP430_OpenDevice("DEVICE_UNKNOWN", "", 0, 0, DEVICE_UNKNOWN) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot identify the MSP430 device", false);
