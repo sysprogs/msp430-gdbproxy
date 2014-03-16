@@ -128,13 +128,75 @@ void MSP430Proxy::MSP430EEMTarget::sEEMHandler( UINT MsgId, UINT wParam, LONG lP
 	((MSP430EEMTarget *)clientHandle)->EEMNotificationHandler((MSP430_MSG)MsgId, wParam, lParam);
 }
 
+void MSP430Proxy::MSP430EEMTarget::DoSendBreakInRequest()
+{
+	LONG state = 0;
+	LONG cpuCycles = 0;
+	m_BreakInPending = true;
+	STATUS_T status = MSP430_State(&state, TRUE, &cpuCycles);
+	if (m_bVerbose)
+		printf("Break-in request: MSP430_State() => %d, state = %d, CPU cycles = %d\n", status, state, cpuCycles);
+	if (status != STATUS_OK)
+		ReportLastMSP430Error("Cannot stop device");
+}
+
 bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 {
 	for (;;)
 	{
 		if (m_bVerbose)
 			printf("Waiting for the target to stop (EEM event will be generated)...\n");
-		m_TargetStopped.Wait();
+		
+		for (;;)
+		{
+			HANDLE events[] = {m_TargetStopped.GetHandle(), m_BreakInSemaphore.GetHandle()};
+			DWORD waitResult = WaitForMultipleObjects(2, events, FALSE, INFINITE);
+			if (waitResult == WAIT_OBJECT_0)
+				break;	//Target stopped
+			else if (waitResult == (WAIT_OBJECT_0 + 1))
+			{
+				if (m_bVerbose)
+					printf("Handling break-in request from main worker thread...\n");
+				DoSendBreakInRequest();
+
+				//Sleep(1000);
+
+				//We have requested a break-in. Let's give the target some time to react.
+
+				for (;;)
+				{
+					if (WaitForSingleObject(m_TargetStopped.GetHandle(), 100) == WAIT_OBJECT_0)
+					{
+						if (m_bVerbose)
+							printf("Break-in handled normally. Target stop reported...\n");
+						break;	//Done
+					}
+
+					LONG state = 0, cpuCycles = 0;
+					STATUS_T status = MSP430_State(&state, FALSE, &cpuCycles);
+					if (m_bVerbose)
+						printf("Post-break-in check: MSP430_State() => %d, state = %d, CPU cycles = %d\n", status, state, cpuCycles);
+					
+					if (state == STOPPED)
+					{
+						if (m_bVerbose)
+							printf("Stop event not reported, but the CPU state is STOPPED. Exiting wait loop...\n");
+						break;
+					}
+
+					if (m_bVerbose)
+						printf("CPU state is not STOPPED. Continuing...\n");
+				}
+
+				break;
+			}
+			else
+			{
+				if (m_bVerbose)
+					printf("Unexpected wait result: 0x%x\n", waitResult);
+				break;
+			}
+		}
 
 		bool breakIn = m_BreakInPending;
 		m_BreakInPending = false;
@@ -311,13 +373,17 @@ bool MSP430Proxy::MSP430EEMTarget::DoResumeTarget( RUN_MODES_t mode )
 
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::SendBreakInRequestAsync()
 {
-	LONG state = 0;
+	if (m_bVerbose)
+		printf("Received an asynchronous break-in request.\n");
+	m_BreakInSemaphore.Signal();
 	m_BreakInPending = true;
+
+	/*LONG state = 0;
 	STATUS_T status = MSP430_State(&state, TRUE, NULL);
 	if (m_bVerbose)
 		printf("Break-in request: MSP430_State() => %d, state = %d\n", status, state);
 	if (status != STATUS_OK)
-		REPORT_AND_RETURN("Cannot stop device", kGDBNotSupported);
+		REPORT_AND_RETURN("Cannot stop device", kGDBNotSupported);*/
 	return kGDBSuccess;
 }
 

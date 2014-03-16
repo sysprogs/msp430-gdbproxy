@@ -16,6 +16,7 @@ namespace MSP430Proxy
 		bool m_bEEMInitialized;
 		
 		BazisLib::Event m_TargetStopped;
+		BazisLib::Semaphore m_BreakInSemaphore;
 		DWORD m_LastStopEvent;
 		
 		WORD m_SoftwareBreakpointWrapperHandle;
@@ -93,6 +94,8 @@ namespace MSP430Proxy
 
 		GDBStatus DoCreateCodeBreakpoint(bool hardware, ULONGLONG Address, INT_PTR *pCookie);
 		GDBStatus DoRemoveCodeBreakpoint(bool hardware, ULONGLONG Address, INT_PTR Cookie);
+
+		void DoSendBreakInRequest();
 
 	public:
 		virtual GDBStatus CreateBreakpoint(BreakpointType type, ULONGLONG Address, unsigned kind, OUT INT_PTR *pCookie) override;
