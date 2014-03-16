@@ -132,7 +132,6 @@ void MSP430Proxy::MSP430EEMTarget::DoSendBreakInRequest()
 {
 	LONG state = 0;
 	LONG cpuCycles = 0;
-	m_BreakInPending = true;
 	STATUS_T status = MSP430_State(&state, TRUE, &cpuCycles);
 	if (m_bVerbose)
 		printf("Break-in request: MSP430_State() => %d, state = %d, CPU cycles = %d\n", status, state, cpuCycles);
@@ -159,8 +158,6 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 					printf("Handling break-in request from main worker thread...\n");
 				DoSendBreakInRequest();
 
-				//Sleep(1000);
-
 				//We have requested a break-in. Let's give the target some time to react.
 
 				for (;;)
@@ -168,7 +165,7 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 					if (WaitForSingleObject(m_TargetStopped.GetHandle(), 100) == WAIT_OBJECT_0)
 					{
 						if (m_bVerbose)
-							printf("Break-in handled normally. Target stop reported...\n");
+							printf("Break-in handled normally. Target stop reported.\n");
 						break;	//Done
 					}
 
@@ -197,9 +194,6 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 				break;
 			}
 		}
-
-		bool breakIn = m_BreakInPending;
-		m_BreakInPending = false;
 
 		LONG regPC = 0;
 
@@ -240,7 +234,7 @@ bool MSP430Proxy::MSP430EEMTarget::WaitForJTAGEvent()
 			if (MSP430_Write_Register(&regPC, PC) != STATUS_OK)
 				REPORT_AND_RETURN("Cannot read PC register", false);
 
-			if (bpState == SoftwareBreakpointManager::BreakpointInactive && m_LastResumeMode != SINGLE_STEP && !breakIn)
+			if (bpState == SoftwareBreakpointManager::BreakpointInactive && m_LastResumeMode != SINGLE_STEP && !m_BreakInSemaphore.TryWait())
 			{
 				if (m_bVerbose)
 					printf("Breakpoint at PC = 0x%X is inactive. Skipping...\n", regPC);
@@ -362,12 +356,6 @@ bool MSP430Proxy::MSP430EEMTarget::DoResumeTarget( RUN_MODES_t mode )
 	if (!__super::DoResumeTarget(mode))
 		return false;
 
-	if (m_BreakInPending)
-	{
-		if (m_bVerbose)
-			printf("Break-in request already pending when resuming the target. Re-sending break-in request to MSP430.DLL.\n");
-		SendBreakInRequestAsync();
-	}
 	return true;
 }
 
@@ -376,14 +364,7 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430EEMTarget::SendBreakInRequestA
 	if (m_bVerbose)
 		printf("Received an asynchronous break-in request.\n");
 	m_BreakInSemaphore.Signal();
-	m_BreakInPending = true;
 
-	/*LONG state = 0;
-	STATUS_T status = MSP430_State(&state, TRUE, NULL);
-	if (m_bVerbose)
-		printf("Break-in request: MSP430_State() => %d, state = %d\n", status, state);
-	if (status != STATUS_OK)
-		REPORT_AND_RETURN("Cannot stop device", kGDBNotSupported);*/
 	return kGDBSuccess;
 }
 
