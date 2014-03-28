@@ -144,7 +144,7 @@ bool MSP430Proxy::SoftwareBreakpointManager::CommitBreakpoints()
 		{
 			if (eraseNeeded)
 			{
-				if (MSP430_Erase(ERASE_MAIN, segBase, sizeof(data)) != STATUS_OK)
+				if (MSP430_Erase(ERASE_SEGMENT, segBase, sizeof(data)) != STATUS_OK)
 					return false;
 			}
 

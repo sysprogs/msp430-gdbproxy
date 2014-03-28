@@ -331,7 +331,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::RemoveBreakpoint( BreakpointType
 GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::EraseFLASH( ULONGLONG addr, size_t length )
 {
 	m_bFLASHCommandsUsed = true;
-	if (MSP430_Erase(ERASE_MAIN, (LONG)addr, length) != STATUS_OK)
+	if (MSP430_Erase(ERASE_SEGMENT, (LONG)addr, length) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot erase FLASH memory", kGDBUnknownError);
 	m_bFLASHErased = true;
 	return kGDBSuccess;
