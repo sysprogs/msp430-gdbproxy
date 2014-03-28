@@ -144,6 +144,9 @@ bool MSP430Proxy::SoftwareBreakpointManager::CommitBreakpoints()
 		{
 			if (eraseNeeded)
 			{
+				if (m_bVerbose)
+					printf("Erasing FLASH segment at 0x%x-0x%x\n", segBase, segBase + sizeof(data) - 1);
+
 				if (MSP430_Erase(ERASE_SEGMENT, segBase, sizeof(data)) != STATUS_OK)
 					return false;
 			}
