@@ -34,4 +34,37 @@ namespace GDBServerFoundation
 		};
 
 	}
+
+	//gdb 7.7 and onward requires 32-bit register values
+	namespace MSP430_32bitRegs
+	{
+		//! Registers are numbered from r0 to r15
+		typedef int RegisterIndex;
+
+		static RegisterEntry _RawRegisterList[] = {
+			{0, "r0", 32},
+			{1, "r1", 32},
+			{2, "r2", 32},
+			{3, "r3", 32},
+			{4, "r4", 32},
+			{5, "r5", 32},
+			{6, "r6", 32},
+			{7, "r7", 32},
+			{8, "r8", 32},
+			{9, "r9", 32},
+			{10, "r10", 32},
+			{11, "r11", 32},
+			{12, "r12", 32},
+			{13, "r13", 32},
+			{14, "r14", 32},
+			{15, "r15", 32},
+		};
+
+		static PlatformRegisterList RegisterList = 
+		{
+			sizeof(_RawRegisterList) / sizeof(_RawRegisterList[0]),
+			_RawRegisterList,
+		};
+
+	}
 }

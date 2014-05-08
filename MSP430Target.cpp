@@ -94,6 +94,8 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize(const GlobalSettings &settings)
 			m_bFLASHErased = true;
 	}
 
+	m_b32BitRegisterMode = settings.Emulate32BitRegisters;
+
 	m_DeviceInfo.string[__countof(m_DeviceInfo.string) - 1] = 0;
 	printf("Found a device: %s\n", m_DeviceInfo.string);
 	printf("Number of hardware breakpoints: %d\n", m_DeviceInfo.nBreakpoints);
@@ -228,8 +230,8 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadFrameRelatedRegisters( int t
 	if (MSP430_Read_Registers(rawRegs, MASKREG(PC) | MASKREG(SP)) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot read frame-related registers", kGDBUnknownError);
 
-	registers[PC] = RegisterValue(rawRegs[PC], 2);
-	registers[SP] = RegisterValue(rawRegs[SP], 2);
+	registers[PC] = RegisterValue(rawRegs[PC], m_b32BitRegisterMode ? 4 : 2);
+	registers[SP] = RegisterValue(rawRegs[SP], m_b32BitRegisterMode ? 4 : 2);
 
 	return kGDBSuccess;
 }
@@ -241,7 +243,7 @@ GDBServerFoundation::GDBStatus MSP430GDBTarget::ReadTargetRegisters( int threadI
 		REPORT_AND_RETURN("Cannot read device registers", kGDBUnknownError);
 
 	for (size_t i = 0; i < __countof(rawRegs); i++)
-		registers[i] = RegisterValue(rawRegs[i], 16);
+		registers[i] = RegisterValue(rawRegs[i], m_b32BitRegisterMode ? 4 : 2);
 	
 	return kGDBSuccess;
 }

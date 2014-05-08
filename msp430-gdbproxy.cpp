@@ -117,6 +117,7 @@ All options are optional:\n\
   --verbose - Enable verbose diagnostic output\n\
   --iface=jtag/sbw/sbwjtag/auto - Specify connection interface\n\
   --ifacespeed=slow/medium/fast - Specify interface speed\n\
+  --32bitregs - Emulate 32-bit registers (required by GDB 7.7+)\n\
 ");
 }
 
@@ -204,6 +205,10 @@ void ParseOptions(int argc, char* argv[], GlobalSettings &settings)
 			else if (!strcmp(val, "slow"))
 				settings.InterfaceSpeed = Slow;
 		}
+		else if (arg == "32bitregs")
+		{
+			settings.Emulate32BitRegisters = true;
+		}
 	}
 }
 
@@ -244,7 +249,13 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	printf("msp430-gdbproxy++ v1.7 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
+	printf("msp430-gdbproxy++ v1.8 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
+
+	if (settings.Emulate32BitRegisters)
+		printf("Using 32-bit register mode (GDB 7.7+)\n");
+	else
+		printf("Using 16-bit register mode (GDB 6.x-7.4)\n");
+
 	if (!settings.NoHint)
 	{
 		printf("\nRun \"msp430-gdbproxy --help\" to learn about command line options.\n\

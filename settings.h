@@ -41,6 +41,7 @@ namespace MSP430Proxy
 		bool Verbose;
 		HardwareInterface Interface;
 		HardwareInterfaceSpeed InterfaceSpeed;
+		bool Emulate32BitRegisters;
 
 		GlobalSettings()
 		{
@@ -57,6 +58,7 @@ namespace MSP430Proxy
 			Verbose = false;
 			Interface = UnspecifiedInterface;
 			InterfaceSpeed = UnspecifiedSpeed;
+			Emulate32BitRegisters = false;
 		}
 	};
 }

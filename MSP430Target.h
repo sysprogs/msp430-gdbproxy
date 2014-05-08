@@ -29,6 +29,7 @@ namespace MSP430Proxy
 		std::vector<bool> m_UsedBreakpoints;
 		
 		bool m_bFLASHErased;
+		bool m_b32BitRegisterMode;
 
 	protected:
 		bool m_BreakInPending, m_bFLASHCommandsUsed;
@@ -46,6 +47,7 @@ namespace MSP430Proxy
 			, m_BreakInPending(false)
 			, m_bFLASHErased(false)
 			, m_bFLASHCommandsUsed(false)
+			, m_b32BitRegisterMode(false)
 		{
 		}
 	public:
@@ -61,7 +63,10 @@ namespace MSP430Proxy
 
 		virtual const PlatformRegisterList *GetRegisterList()
 		{
-			return &GDBServerFoundation::MSP430::RegisterList;
+			if (m_b32BitRegisterMode)
+				return &GDBServerFoundation::MSP430_32bitRegs::RegisterList;
+			else
+				return &GDBServerFoundation::MSP430::RegisterList;
 		}
 
 	public:	//Register accessing API
