@@ -32,11 +32,11 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\..\bzslib\BazisLibIncludes.props" />
+    <Import Project="..\..\..\..\sysprogs-github\BazisLib\BazisLibIncludes.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\..\bzslib\BazisLibIncludes.props" />
+    <Import Project="..\..\..\..\sysprogs-github\BazisLib\BazisLibIncludes.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -102,13 +102,13 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\bzslib\bzscore\bzscore.vcxproj">
+    <ProjectReference Include="..\..\..\..\sysprogs-github\BazisLib\bzscore\bzscore.vcxproj">
       <Project>{a009693f-aadd-42cf-8e6e-f7bbf5601e5c}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\..\bzslib\bzshlp\bzshlp.vcxproj">
+    <ProjectReference Include="..\..\..\..\sysprogs-github\BazisLib\bzshlp\bzshlp.vcxproj">
       <Project>{443b5c7d-6675-4a16-a297-e8653eee39ad}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\..\bzslib\bzsnet\bzsnet.vcxproj">
+    <ProjectReference Include="..\..\..\..\sysprogs-github\BazisLib\bzsnet\bzsnet.vcxproj">
       <Project>{298967c3-01da-4a19-883c-59635b04aacd}</Project>
     </ProjectReference>
     <ProjectReference Include="..\..\GDBServerFoundation\GDBServerFoundation.vcxproj">
