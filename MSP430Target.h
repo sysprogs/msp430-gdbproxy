@@ -1,8 +1,8 @@
 #pragma once
-#include "../../GDBServerFoundation/GDBServer.h"
-#include "../../GDBServerFoundation/GDBStub.h"
-#include "../../GDBServerFoundation/IGDBTarget.h"
-#include <MSP430_Debug.h>
+#include "GDBServerFoundation/GDBServer.h"
+#include "GDBServerFoundation/GDBStub.h"
+#include "GDBServerFoundation/IGDBTarget.h"
+#include "TI/Inc/MSP430_Debug.h"
 
 #include "registers-msp430.h"
 #include <vector>

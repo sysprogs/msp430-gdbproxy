@@ -1,0 +1,6 @@
+[submodule "GDBServerFoundation"]
+	path = GDBServerFoundation
+	url = https://github.com/sysprogs/GDBServerFoundation
+[submodule "BazisLib"]
+	path = BazisLib
+	url = https://github.com/sysprogs/BazisLib

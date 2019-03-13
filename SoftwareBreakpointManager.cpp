@@ -1,7 +1,7 @@
 #include "StdAfx.h"
 #include "SoftwareBreakpointManager.h"
 #include <bzscore/assert.h>
-#include <MSP430_Debug.h>
+#include "TI/Inc/MSP430_Debug.h"
 
 using namespace MSP430Proxy;
 

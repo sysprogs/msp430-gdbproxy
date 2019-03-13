@@ -1,5 +1,5 @@
 #pragma once
-#include "../../GDBServerFoundation/GDBRegisters.h"
+#include "GDBServerFoundation/GDBRegisters.h"
 
 namespace GDBServerFoundation
 {

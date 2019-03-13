@@ -94,7 +94,7 @@ public:
 	}
 };
 
-#include <msp430.h>
+#include "TI/Inc/msp430.h"
 #include "MSP430Util.h"
 
 void ShowHelpScreen()

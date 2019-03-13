@@ -1,6 +1,6 @@
 #pragma once
 #include <bzscore/sync.h>
-#include "../../GDBServerFoundation/IGDBTarget.h"
+#include "GDBServerFoundation/IGDBTarget.h"
 
 namespace MSP430Proxy
 {

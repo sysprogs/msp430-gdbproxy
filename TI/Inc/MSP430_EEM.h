@@ -99,7 +99,7 @@
 #define MSP430_EEM_H
 
 
-#include <MSP430_Debug.h>
+#include "MSP430_Debug.h"
 
 #if defined(__cplusplus)
 extern "C" {

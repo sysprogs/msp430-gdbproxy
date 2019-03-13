@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "MSP430EEMTarget.h"
 
-#include <MSP430_EEM.h>
+#include "TI/Inc/MSP430_EEM.h"
 #include "SoftwareBreakpointManager.h"
 
 #define REPORT_AND_RETURN(msg, result) { ReportLastMSP430Error(msg); return result; }

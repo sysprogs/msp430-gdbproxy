@@ -127,7 +127,7 @@
 #define MSP430_H
 
 #include <stdint.h>
-#include <DLL430_SYMBOL.h>
+#include "DLL430_SYMBOL.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
