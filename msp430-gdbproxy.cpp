@@ -113,6 +113,7 @@ All options are optional:\n\
   --tcpport=<n> - Listen on TCP port n (default 2000)\n\
   --keepalive - Keep running after GDB disconnects, wait for next connection\n\
   --autoerase - Erase FLASH when debugging is started\n\
+  --eraseinfo - Erase FLASH also includes information memory\n\
   --nohint - Do not show the 'how to start debugging' message\n\
   --verbose - Enable verbose diagnostic output\n\
   --iface=jtag/sbw/sbwjtag/auto - Specify connection interface\n\
@@ -209,6 +210,10 @@ void ParseOptions(int argc, char* argv[], GlobalSettings &settings)
 		{
 			settings.Emulate32BitRegisters = true;
 		}
+		else if (arg == "eraseinfo")
+		{
+			settings.EraseInfoMem = true;
+		}
 	}
 }
 
@@ -249,7 +254,7 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	printf("msp430-gdbproxy++ v1.8 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
+	printf("msp430-gdbproxy++ v1.9 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
 
 	if (settings.Emulate32BitRegisters)
 		printf("Using 32-bit register mode (GDB 7.7+)\n");
