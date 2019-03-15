@@ -85,10 +85,11 @@ bool MSP430Proxy::MSP430GDBTarget::Initialize(const GlobalSettings &settings)
 	if (MSP430_Reset(ALL_RESETS, FALSE, FALSE) != STATUS_OK)
 		REPORT_AND_RETURN("Cannot reset the MSP430 device", false);
 
+	m_bEraseInfoMem = settings.EraseInfoMem;
 	if (settings.AutoErase)
 	{
 		printf("Erasing FLASH...\n");
-		if (MSP430_Erase(ERASE_MAIN, m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd - m_DeviceInfo.mainStart) != STATUS_OK)
+		if (MSP430_Erase(m_bEraseInfoMem ? ERASE_ALL : ERASE_MAIN, m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd - m_DeviceInfo.mainStart) != STATUS_OK)
 			printf("Warning: cannot erase FLASH: %s\n", GetLastMSP430Error());
 		else
 			m_bFLASHErased = true;
@@ -161,7 +162,7 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::ExecuteRemoteComman
 	}
 	else if (command == "erase")
 	{
-		if (MSP430_Erase(ERASE_MAIN, m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd - m_DeviceInfo.mainStart) != STATUS_OK)
+		if (MSP430_Erase(m_bEraseInfoMem ? ERASE_ALL : ERASE_MAIN, m_DeviceInfo.mainStart, m_DeviceInfo.mainEnd - m_DeviceInfo.mainStart) != STATUS_OK)
 		{
 			output = "Cannot erase FLASH: ";
 			output += GetLastMSP430Error();

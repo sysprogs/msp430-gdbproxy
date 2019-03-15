@@ -30,6 +30,7 @@ namespace MSP430Proxy
 		
 		bool m_bFLASHErased;
 		bool m_b32BitRegisterMode;
+		bool m_bEraseInfoMem;
 
 	protected:
 		bool m_BreakInPending, m_bFLASHCommandsUsed;
@@ -48,6 +49,7 @@ namespace MSP430Proxy
 			, m_bFLASHErased(false)
 			, m_bFLASHCommandsUsed(false)
 			, m_b32BitRegisterMode(false)
+			, m_bEraseInfoMem(false)
 		{
 		}
 	public:
