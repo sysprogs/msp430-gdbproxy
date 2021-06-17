@@ -254,7 +254,7 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	printf("msp430-gdbproxy++ v1.9 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
+	printf("msp430-gdbproxy++ v1.10 [http://gnutoolchains.com/msp430/gdbproxy]\nSuccessfully initialized MSP430.DLL on %s\nListening on port %d.\n", settings.PortName, settings.ListenPort);
 
 	if (settings.Emulate32BitRegisters)
 		printf("Using 32-bit register mode (GDB 7.7+)\n");

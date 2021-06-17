@@ -28,7 +28,7 @@ namespace MSP430Proxy
 		bool m_bClosePending, m_bValid;
 		std::vector<bool> m_UsedBreakpoints;
 		
-		bool m_bFLASHErased;
+		bool m_bFLASHErased, m_bDetached;
 		bool m_b32BitRegisterMode;
 		bool m_bEraseInfoMem;
 
@@ -47,6 +47,7 @@ namespace MSP430Proxy
 			, m_bVerbose(false)
 			, m_BreakInPending(false)
 			, m_bFLASHErased(false)
+			, m_bDetached(false)
 			, m_bFLASHCommandsUsed(false)
 			, m_b32BitRegisterMode(false)
 			, m_bEraseInfoMem(false)

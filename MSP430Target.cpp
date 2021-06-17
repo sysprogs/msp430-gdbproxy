@@ -157,7 +157,8 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::ExecuteRemoteComman
 	{
 		output = "Supported stub commands:\n\
 \tmon help      - Display this message\n\
-\tmon erase     - Erase the FLASH memory\n";
+\tmon erase     - Erase the FLASH memory\n\
+\tmon detach    - Disconnect the target, but keep it running\n";
 		return kGDBSuccess;
 	}
 	else if (command == "erase")
@@ -173,6 +174,19 @@ GDBServerFoundation::GDBStatus MSP430Proxy::MSP430GDBTarget::ExecuteRemoteComman
 			output = "Flash memory erased. Run \"load\" to program your binary.\n";
 			m_bFLASHErased = true;
 		}
+
+		return kGDBSuccess;
+	}
+	else if (command == "detach")
+	{
+		STATUS_T status = MSP430_Run(FREE_RUN, TRUE);
+		if (status == STATUS_OK)
+		{
+			output = "Successfully detached from target\n";
+			m_bDetached = true;
+		}
+		else
+			output = "Failed to resume target\n";
 
 		return kGDBSuccess;
 	}
